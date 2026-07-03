@@ -32,6 +32,10 @@ This repository implements a **production-oriented digital twin** for a four-sta
 | 🛠️ **Maintenance** | CBM scheduler, economic optimization, actionable recommendations |
 | 🚦 **Fleet ops** | Cross-engine ranking, drift monitoring, comparative analytics |
 | 🌐 **Serving** | Stateful real-time + batch FastAPI service, Streamlit dashboard, HTML/MD reports |
+| 🧪 **What-if simulator** | Adjust fuel flow, RPM, ambient conditions, component efficiency, sensor noise; instant before/after comparison |
+| ⚠️ **Fault injection** | Compressor fouling, turbine erosion, fuel nozzle blockage, bearing wear, sensor drift/bias — propagated through physics → estimator → health → RUL → maintenance |
+| 🔍 **Root cause analysis** | Ranked contributing factors and causal-chain explanations behind a health/RUL change; SHAP integration for ML-model predictions when installed |
+| 💡 **Maintenance decision engine** | Multiple ranked maintenance options (monitor → inspect → repair → overhaul → replace) scored on cost, downtime, risk, and expected RUL gain |
 
 ---
 
@@ -143,6 +147,10 @@ Base URL: `http://localhost:8000`
 | `GET` | `/health` | Liveness / readiness probe |
 | `POST` | `/v1/engines/{engine_id}/update` | Push a single sensor reading, get updated health state |
 | `POST` | `/v1/engines/{engine_id}/batch` | Push a batch of cycles for one engine |
+| `POST` | `/v1/scenarios/simulate` | What-if simulation: before/after health, RUL, risk, thrust, TSFC, confidence + root cause |
+| `POST` | `/v1/engines/{engine_id}/faults` | Replace the active fault set (compressor fouling, turbine erosion, fuel nozzle blockage, bearing wear, sensor drift, sensor bias) |
+| `GET` | `/v1/engines/{engine_id}/faults` | Read the active fault set |
+| `POST` | `/v1/engines/{engine_id}/maintenance/options` | Ranked maintenance options (cost, downtime, risk, expected RUL gain) |
 
 The service is **stateful per engine** — each update advances that engine's Bayesian estimator and health trajectory in memory, so real-time streaming and REST batch ingestion share the same underlying twin.
 
@@ -162,7 +170,10 @@ digital_twin/
 │   ├── uncertainty/           # Conformal prediction · MC-dropout · ensembles
 │   ├── health/                # Compressor / combustor / turbine / overall health
 │   ├── prediction/            # RUL · failure probability · thrust · fuel efficiency
-│   ├── maintenance/           # CBM scheduler, economics, recommendations
+│   ├── maintenance/           # CBM scheduler, economics, recommendations, multi-option decision engine
+│   ├── faults/                 # Fault injection engine (component + sensor faults)
+│   ├── simulation/              # What-if scenario simulator
+│   ├── explainability/           # Root cause analysis (physics-sensitivity + SHAP)
 │   ├── digital_twin/          # DigitalTwin facade (engine.py) + fleet.py + runtime
 │   ├── dataset/                # Loader, preprocessing, feature engineering, splits
 │   ├── training/               # Trainer, cross-validation, hyperparameter search
@@ -231,7 +242,57 @@ physics:
 runtime:
   drift_threshold: 0.12
   failure_health_threshold: 0.3
+scenario:
+  degradation_threshold: 0.3
+maintenance_engine:
+  cost_weight: 0.3
+  downtime_weight: 0.2
+  risk_weight: 0.35
+  rul_gain_weight: 0.15
+  full_life_horizon_cycles: 300.0
+  failure_cost: 500000.0
 ```
+
+---
+
+## What-If, Fault Injection, Root Cause & Maintenance Options
+
+```python
+from src.simulation.what_if import ScenarioSimulator, ScenarioAdjustment
+from src.faults.injection import FaultInjector, FaultSpec, FaultType
+from src.explainability.root_cause import analyze_scenario
+from src.maintenance.decision_engine import MaintenanceDecisionEngine
+
+# What-if: raise fuel flow, drop compressor efficiency, compare before/after.
+comparison = ScenarioSimulator().run(
+    baseline_observation,
+    ScenarioAdjustment(fuel_flow_kg_s=1.8, compressor_efficiency=0.65),
+)
+print(comparison.baseline, comparison.adjusted, comparison.delta)
+
+# Fault injection: propagate compressor fouling + a sensor bias through the twin.
+twin.fault_injector = FaultInjector([
+    FaultSpec(FaultType.COMPRESSOR_FOULING, severity=0.4),
+    FaultSpec(FaultType.SENSOR_BIAS, severity=0.3, target_sensor="T3"),
+])
+result = twin.update(observation)
+
+# Root cause: rank what drove the health delta.
+report = analyze_scenario(baseline_inputs, adjusted_inputs, comparison.delta["overall_health"])
+print(report.summary, report.causal_chain)
+
+# Maintenance options: ranked menu, not just one recommendation.
+options = MaintenanceDecisionEngine().generate_options(
+    health=result["OverallHealth"],
+    rul_cycles=result["RULCycles"],
+    failure_probability=result["FailureProbability"],
+)
+```
+
+All four are also exposed via `POST /v1/scenarios/simulate`, `POST /v1/engines/{id}/faults`,
+and `POST /v1/engines/{id}/maintenance/options`, and via the Streamlit dashboard's
+**What-If Simulator**, **Fault Injection**, **Root Cause Analysis**, and
+**Maintenance Options** pages.
 
 ---
 
