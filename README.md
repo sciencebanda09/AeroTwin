@@ -1,33 +1,231 @@
-# Turbojet Digital Twin
+<div align="center">
 
-Production-oriented physics-informed digital twin for real-time four-stage turbojet health
-monitoring. It combines Brayton-cycle constraints, Bayesian state estimation, supervised
-surrogates, uncertainty calibration, RUL prediction, fleet analytics, and condition-based
-maintenance.
+# ⚙️ Turbojet Digital Twin
 
-## Quick start
+**Physics-informed digital twin for real-time four-stage turbojet health monitoring, RUL prediction, and fleet-scale condition-based maintenance.**
 
-```powershell
-python -m venv .venv
-.venv\Scripts\pip install -e ".[dev,api,dashboard,reports]"
-python pipeline.py demo
-pytest
-uvicorn src.api.server:app --reload
-streamlit run src/viz/dashboard.py
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](src/api/server.py)
+[![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](src/viz/dashboard.py)
+[![Docker](https://img.shields.io/badge/container-Docker-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![Tests](https://img.shields.io/badge/tests-pytest-0A9EDC?logo=pytest&logoColor=white)](tests)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](pyproject.toml)
+
+[Overview](#overview) · [Architecture](#architecture) · [Quick Start](#quick-start) · [API](#api-reference) · [Project Layout](#project-layout) · [Deployment](#deployment) · [Testing](#testing--quality)
+
+</div>
+
+---
+
+## Overview
+
+This repository implements a **production-oriented digital twin** for a four-stage turbojet engine. It fuses a physically constrained Brayton-cycle model with a learned surrogate through Bayesian state estimation, producing calibrated health trajectories that drive remaining-useful-life (RUL) prediction, failure-risk scoring, and condition-based maintenance recommendations — for a single engine or an entire fleet.
+
+| Capability | Description |
+|---|---|
+| 🔥 **Physics core** | Brayton-cycle thermodynamic reconstruction with conservation-law residuals |
+| 📡 **State estimation** | EKF, UKF, and sequential Monte Carlo (particle filter) estimators |
+| 🧠 **Learned surrogate** | Multi-output health/performance regression with model selection |
+| 📏 **Uncertainty** | Conformal prediction + MC-dropout + ensemble calibration |
+| ⏳ **Prognostics** | RUL quantiles, failure probability, thrust & fuel-efficiency forecasts |
+| 🛠️ **Maintenance** | CBM scheduler, economic optimization, actionable recommendations |
+| 🚦 **Fleet ops** | Cross-engine ranking, drift monitoring, comparative analytics |
+| 🌐 **Serving** | Stateful real-time + batch FastAPI service, Streamlit dashboard, HTML/MD reports |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph INGEST["📥 Ingestion"]
+        A[Sensor Stream<br/>P2·T2·P3·T3·P4·T4·RPM·Fuel] --> B[Schema & Range<br/>Validation]
+    end
+
+    subgraph CORE["🧬 Digital Twin Core"]
+        direction LR
+        B --> C[⚡ Brayton-Cycle<br/>Physics Model]
+        B --> D[🧠 Learned<br/>Surrogate]
+        C --> E{{Bayesian State<br/>Estimator<br/>EKF · UKF · SMC}}
+        D --> E
+        E --> F[Calibrated Health<br/>Trajectory + Uncertainty]
+    end
+
+    subgraph INTEL["📊 Prognostics & Decisioning"]
+        F --> G[RUL Quantiles]
+        F --> H[Failure Probability]
+        F --> I[Thrust / TSFC<br/>Forecast]
+        G & H & I --> J[Condition-Based<br/>Maintenance Engine]
+        J --> K[Maintenance Economics<br/>& Recommendations]
+    end
+
+    subgraph SERVE["🌐 Serving Layer"]
+        F --> L[DigitalTwin Facade]
+        L --> M[FastAPI<br/>real-time + batch]
+        L --> N[Streamlit<br/>Dashboard]
+        L --> O[Report Generator<br/>MD / HTML]
+        L --> P[Fleet Analytics<br/>ranking · drift]
+        L --> Q[Model Export<br/>joblib / ONNX]
+    end
+
+    style CORE fill:#1a1a2e,stroke:#e94560,color:#fff
+    style INTEL fill:#16213e,stroke:#0f4c75,color:#fff
+    style SERVE fill:#0f3460,stroke:#3282b8,color:#fff
+    style INGEST fill:#222,stroke:#888,color:#fff
 ```
 
-Train with `python pipeline.py train --data path/to/data.csv`, then infer with
-`python pipeline.py predict --data path/to/data.csv`. Artifacts are written below `models/`
-and `results/`. The expected CSV schema is documented in `docs/DATA.md`.
+**Design principle:** every consumer (CLI, API, dashboard, fleet workflows) talks to one shared `DigitalTwin` facade — physics and learning stay decoupled, state stays JSON-safe, and models/reports are versioned artifacts.
 
-## Engineering scope
+---
 
-- Physically constrained Brayton-cycle reconstruction with conservation residuals
-- EKF, UKF, and sequential Monte Carlo state estimators
-- Multi-output health/performance surrogate selection and conformal intervals
-- Data-driven degradation trajectories, RUL quantiles, and failure probabilities
-- Stateful real-time and batch API, fleet ranking, drift monitoring, and maintenance economics
-- Streamlit dashboard, Markdown/HTML reports, model export, CLI, tests, and containers
+## Quick Start
 
-All stochastic workflows use configured seeds. Optional accelerators degrade cleanly when their
-libraries are not installed.
+```powershell
+# 1. Environment
+python -m venv .venv
+.venv\Scripts\pip install -e ".[dev,api,dashboard,reports]"
+
+# 2. Smoke-test the full pipeline
+python pipeline.py demo
+pytest
+
+# 3. Serve
+uvicorn src.api.server:app --reload          # REST API  → http://localhost:8000
+streamlit run src/viz/dashboard.py           # Dashboard → http://localhost:8501
+```
+
+**Train → Predict:**
+
+```bash
+python pipeline.py train   --data path/to/data.csv --kind extra_trees --output models/best_model.joblib
+python pipeline.py predict --data path/to/data.csv --model models/best_model.joblib
+python pipeline.py evaluate --data path/to/data.csv --model models/best_model.joblib
+```
+
+Artifacts land in `models/` and `results/`. CSV schema is defined in [`docs/DATA.md`](docs/DATA.md). All stochastic workflows are seeded (`config.yaml → seed`); optional accelerators (`xgboost`, `torch`, `onnx`) degrade cleanly if not installed.
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:8000`
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Liveness / readiness probe |
+| `POST` | `/v1/engines/{engine_id}/update` | Push a single sensor reading, get updated health state |
+| `POST` | `/v1/engines/{engine_id}/batch` | Push a batch of cycles for one engine |
+
+The service is **stateful per engine** — each update advances that engine's Bayesian estimator and health trajectory in memory, so real-time streaming and REST batch ingestion share the same underlying twin.
+
+---
+
+## Project Layout
+
+```
+digital_twin/
+├── pipeline.py              # CLI entrypoint: train · predict · evaluate · demo
+├── config.yaml              # Seed, data, model, physics & runtime thresholds
+│
+├── src/
+│   ├── physics/              # Brayton-cycle model, thermodynamics, component maps
+│   ├── estimation/           # EKF · UKF · particle filter state estimators
+│   ├── surrogate/             # Learned multi-output model + training/benchmarking
+│   ├── uncertainty/           # Conformal prediction · MC-dropout · ensembles
+│   ├── health/                # Compressor / combustor / turbine / overall health
+│   ├── prediction/            # RUL · failure probability · thrust · fuel efficiency
+│   ├── maintenance/           # CBM scheduler, economics, recommendations
+│   ├── digital_twin/          # DigitalTwin facade (engine.py) + fleet.py + runtime
+│   ├── dataset/                # Loader, preprocessing, feature engineering, splits
+│   ├── training/               # Trainer, cross-validation, hyperparameter search
+│   ├── metrics/                 # Regression, uncertainty & health metrics
+│   ├── report/                   # Markdown/HTML report generator
+│   ├── viz/                       # Plots, Streamlit dashboard, engine animation
+│   ├── api/                        # FastAPI service
+│   ├── deployment/                  # Model export (ONNX) + inference benchmarking
+│   └── utils/                        # Config, logging, paths, seeding, timers
+│
+├── tests/                    # pytest suite
+├── configs/                  # Additional run configurations
+├── data/  · models/  · results/     # Datasets, trained artifacts, run outputs
+├── docs/
+│   ├── ARCHITECTURE.md       # Data-flow & design notes
+│   └── DATA.md               # Dataset contract / schema
+├── deployment/                # Deployment assets
+├── Dockerfile · docker-compose.yml
+└── pyproject.toml · requirements.txt
+```
+
+---
+
+## Deployment
+
+```bash
+docker compose up --build
+```
+
+- Multi-stage-safe single image (`python:3.12-slim`), runs as non-root user `twin`
+- Exposes the FastAPI service on **:8000** with a built-in `/health` healthcheck
+- Trained models are mounted read-only from `./models`
+
+For edge/embedded inference, export to ONNX via `src/deployment/export.py` and benchmark latency with `src/deployment/benchmark.py`.
+
+---
+
+## Testing & Quality
+
+```bash
+pytest --cov=src              # Test suite + coverage
+ruff check src/                # Lint
+black --check src/             # Format check
+mypy src/                      # Static typing
+```
+
+Pre-commit hooks (`.pre-commit-config.yaml`) run these automatically on every commit.
+
+---
+
+## Configuration Reference
+
+`config.yaml` controls the full run:
+
+```yaml
+seed: 42
+data:
+  path: data/turbojet.csv
+  test_size: 0.2
+model:
+  kind: extra_trees
+  n_estimators: 200
+physics:
+  max_temperature_k: 1900.0
+  compressor_pressure_ratio: 10.0
+runtime:
+  drift_threshold: 0.12
+  failure_health_threshold: 0.3
+```
+
+---
+
+## Dataset Contract
+
+One row = one engine cycle. SI units throughout (metres, kelvin, pascals, rev/min, kg/s, newtons). Health values are dimensionless `[0, 1]`. Full contract in [`docs/DATA.md`](docs/DATA.md).
+
+| Group | Fields |
+|---|---|
+| Identity | `EngineID`, `Cycle` |
+| Flight condition | `Altitude`, `Mach`, `Tamb`, `Pamb` |
+| Operating point | `RPM`, `FuelFlow` |
+| Station measurements | `P2`, `T2`, `P3`, `T3`, `P4`, `T4` |
+| Training-only targets | `CompressorHealth`, `CombustorHealth`, `TurbineHealth`, `OverallHealth`, `Thrust`, `TSFC` |
+
+Splits are grouped by `EngineID` to prevent leakage across train/test.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+</div>
