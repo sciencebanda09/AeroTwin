@@ -26,7 +26,7 @@ This repository implements a **production-oriented digital twin** for a four-sta
 |---|---|
 | 🔥 **Physics core** | Brayton-cycle thermodynamic reconstruction with conservation-law residuals |
 | 📡 **State estimation** | EKF, UKF, and sequential Monte Carlo (particle filter) estimators |
-| 🧠 **Learned surrogate** | Multi-output health/performance regression with model selection |
+| 🧠 **Learned surrogate** | Multi-output health/performance regression with model selection, trained on physics-residual features (measured vs. healthy-engine-predicted station values) alongside raw sensors |
 | 📏 **Uncertainty** | Conformal prediction + MC-dropout + ensemble calibration |
 | ⏳ **Prognostics** | RUL quantiles, failure probability, thrust & fuel-efficiency forecasts |
 | 🛠️ **Maintenance** | CBM scheduler, economic optimization, actionable recommendations |
@@ -129,10 +129,12 @@ streamlit run src/viz/dashboard.py           # Dashboard → http://localhost:85
 **Train → Predict:**
 
 ```bash
-python pipeline.py train   --data path/to/data.csv --kind extra_trees --output models/best_model.joblib
+python pipeline.py train   --data path/to/data.csv --kind extra_trees --output models/best_model.joblib --strategy official
 python pipeline.py predict --data path/to/data.csv --model models/best_model.joblib
 python pipeline.py evaluate --data path/to/data.csv --model models/best_model.joblib
 ```
+
+`--strategy official` (default) holds out a fraction of each engine's own cycles, matching the officially distributed `train.csv`/`test.csv` — use this for metrics comparable to how submissions are graded. `--strategy grouped` holds out entire engines instead, a harder generalization stress test not used by the official evaluation.
 
 Artifacts land in `models/` and `results/`. CSV schema is defined in [`docs/DATA.md`](docs/DATA.md). All stochastic workflows are seeded (`config.yaml → seed`); optional accelerators (`xgboost`, `torch`, `onnx`) degrade cleanly if not installed.
 
@@ -308,7 +310,7 @@ One row = one engine cycle. SI units throughout (metres, kelvin, pascals, rev/mi
 | Station measurements | `P2`, `T2`, `P3`, `T3`, `P4`, `T4` |
 | Training-only targets | `CompressorHealth`, `CombustorHealth`, `TurbineHealth`, `OverallHealth`, `Thrust`, `TSFC` |
 
-Splits are grouped by `EngineID` to prevent leakage across train/test.
+Two split strategies are available (`src/dataset/split.py`): `official_split` holds out a fraction of each engine's own cycles — this matches the officially distributed `train.csv`/`test.csv` and is the default used by `pipeline.py train`. `grouped_split` holds out entire engines instead, a harder generalization check not used by the official evaluation.
 
 ---
 
