@@ -3,9 +3,24 @@
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
+from src.dataset.features import RESIDUAL_COLUMNS
 from src.dataset.loader import FEATURES, TARGETS
 from src.dataset.preprocess import build_preprocessor
 from .model import SurrogateModel
+
+# Ratio/delta columns added by engineer_features(), plus physics-residual
+# health columns added by healthy_reference_residuals(). Must match what
+# SurrogateModel._prepare() -> engineer_all_features() actually produces.
+_ENGINEERED_COLUMNS = [
+    "CompressorPR",
+    "TurbinePR",
+    "CompressorDeltaT",
+    "TurbineDeltaT",
+    "FuelPerRPM",
+    "CorrectedRPM",
+    *RESIDUAL_COLUMNS,
+]
+PIPELINE_FEATURES = FEATURES + _ENGINEERED_COLUMNS
 
 
 def create_model(
@@ -25,5 +40,9 @@ def create_model(
     }
     if kind not in estimators:
         raise ValueError(f"Unsupported model kind: {kind}")
-    pipeline = Pipeline([("preprocess", build_preprocessor(FEATURES)), ("model", estimators[kind])])
+    pipeline = Pipeline(
+        [("preprocess", build_preprocessor(PIPELINE_FEATURES)), ("model", estimators[kind])]
+    )
+    # SurrogateModel.feature_names stays the raw schema; the pipeline itself
+    # is fit on the wider engineered column set via SurrogateModel._prepare.
     return SurrogateModel(pipeline, FEATURES, TARGETS)
