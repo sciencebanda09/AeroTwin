@@ -7,7 +7,7 @@ import streamlit as st
 from src.dataset.loader import _COLUMN_ALIASES
 from src.digital_twin.engine import DigitalTwin
 from src.digital_twin.fleet import rank_fleet
-from src.explainability.root_cause import analyze_faults, analyze_scenario
+from src.explainability.root_cause import analyze_scenario
 from src.faults.injection import FaultInjector, FaultSpec, FaultType
 from src.maintenance.decision_engine import MaintenanceDecisionEngine
 from src.simulation.what_if import ScenarioAdjustment, ScenarioSimulator
