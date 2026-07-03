@@ -11,3 +11,12 @@ physics:
 runtime:
   drift_threshold: 0.12
   failure_health_threshold: 0.3
+scenario:
+  degradation_threshold: 0.3
+maintenance_engine:
+  cost_weight: 0.3
+  downtime_weight: 0.2
+  risk_weight: 0.35
+  rul_gain_weight: 0.15
+  full_life_horizon_cycles: 300.0
+  failure_cost: 500000.0

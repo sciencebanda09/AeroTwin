@@ -26,12 +26,31 @@ class RuntimeConfig(BaseModel):
     failure_health_threshold: float = Field(0.3, gt=0, lt=1)
 
 
+class ScenarioConfig(BaseModel):
+    """Defaults for the what-if scenario simulator."""
+
+    degradation_threshold: float = Field(0.3, gt=0, lt=1)
+
+
+class MaintenanceEngineConfig(BaseModel):
+    """Weights and horizons for the multi-option maintenance decision engine."""
+
+    cost_weight: float = Field(0.3, ge=0)
+    downtime_weight: float = Field(0.2, ge=0)
+    risk_weight: float = Field(0.35, ge=0)
+    rul_gain_weight: float = Field(0.15, ge=0)
+    full_life_horizon_cycles: float = Field(300.0, gt=0)
+    failure_cost: float = Field(500_000.0, gt=0)
+
+
 class Settings(BaseModel):
     seed: int = 42
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
     physics: PhysicsConfig = PhysicsConfig()
     runtime: RuntimeConfig = RuntimeConfig()
+    scenario: ScenarioConfig = ScenarioConfig()
+    maintenance_engine: MaintenanceEngineConfig = MaintenanceEngineConfig()
 
 
 def load_config(path: str | Path = "config.yaml") -> Settings:
