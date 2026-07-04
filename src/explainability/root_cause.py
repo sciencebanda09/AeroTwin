@@ -36,7 +36,10 @@ except ImportError:  # pragma: no cover
 # temperature and thermal stress (hurting turbine/combustor health headroom
 # over time); lower compressor/turbine efficiency directly reduces health.
 _SENSITIVITY = {
-    "FuelFlow": (0.6, "Fuel flow increased -> turbine inlet temperature rose -> thermal stress increased"),
+    "FuelFlow": (
+        0.6,
+        "Fuel flow increased -> turbine inlet temperature rose -> thermal stress increased",
+    ),
     "RPM": (0.4, "RPM increased -> compressor pressure ratio rose -> mechanical loading increased"),
     "Tamb": (0.15, "Ambient temperature increased -> compressor work increased -> margin reduced"),
     "Pamb": (0.1, "Ambient pressure changed -> station pressures shifted -> cycle margin shifted"),
@@ -104,10 +107,14 @@ def analyze_scenario(
         scored.append(ContributingFactor(key, round(contribution, 4), narrative))
 
     scored.sort(key=lambda item: abs(item.contribution), reverse=True)
-    direction = "decreased" if health_delta < 0 else "increased" if health_delta > 0 else "did not change"
+    direction = (
+        "decreased" if health_delta < 0 else "increased" if health_delta > 0 else "did not change"
+    )
     summary = f"Overall health {direction} by {abs(health_delta):.3f}."
     if scored:
-        summary += f" Primary driver: {scored[0].factor} ({scored[0].explanation.split(' -> ')[0]})."
+        summary += (
+            f" Primary driver: {scored[0].factor} ({scored[0].explanation.split(' -> ')[0]})."
+        )
     chain = [f.explanation for f in scored[:3]]
     if chain:
         chain.append("-> RUL and failure probability updated accordingly")
@@ -145,7 +152,9 @@ def analyze_faults(fault_summary: list[dict[str, Any]], health_delta: float) -> 
         key=lambda item: item.contribution,
         reverse=True,
     )
-    direction = "decreased" if health_delta < 0 else "increased" if health_delta > 0 else "did not change"
+    direction = (
+        "decreased" if health_delta < 0 else "increased" if health_delta > 0 else "did not change"
+    )
     summary = f"Overall health {direction} by {abs(health_delta):.3f} due to {len(scored)} active fault(s)."
     chain = [f.explanation for f in scored[:3]]
     if chain:

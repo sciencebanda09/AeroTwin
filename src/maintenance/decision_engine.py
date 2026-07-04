@@ -114,7 +114,9 @@ class MaintenanceDecisionEngine:
             _OPTION_TEMPLATE, costs, downtimes, strict=True
         ):
             economics = estimate_economics(
-                failure_probability, planned_cost=cost, failure_cost=self.failure_cost,
+                failure_probability,
+                planned_cost=cost,
+                failure_cost=self.failure_cost,
                 downtime_hours=downtime,
             )
             rul_gain = rul_frac * rul_deficit

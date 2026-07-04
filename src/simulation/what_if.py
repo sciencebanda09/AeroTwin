@@ -165,24 +165,34 @@ class ScenarioSimulator:
         adjusted_input = CycleInput(
             altitude_m=base_input.altitude_m,
             mach=base_input.mach,
-            ambient_temperature_k=adjustment.ambient_temperature_k
-            if adjustment.ambient_temperature_k is not None
-            else base_input.ambient_temperature_k,
-            ambient_pressure_pa=adjustment.ambient_pressure_pa
-            if adjustment.ambient_pressure_pa is not None
-            else base_input.ambient_pressure_pa,
+            ambient_temperature_k=(
+                adjustment.ambient_temperature_k
+                if adjustment.ambient_temperature_k is not None
+                else base_input.ambient_temperature_k
+            ),
+            ambient_pressure_pa=(
+                adjustment.ambient_pressure_pa
+                if adjustment.ambient_pressure_pa is not None
+                else base_input.ambient_pressure_pa
+            ),
             rpm=adjustment.rpm if adjustment.rpm is not None else base_input.rpm,
-            fuel_flow_kg_s=adjustment.fuel_flow_kg_s
-            if adjustment.fuel_flow_kg_s is not None
-            else base_input.fuel_flow_kg_s,
+            fuel_flow_kg_s=(
+                adjustment.fuel_flow_kg_s
+                if adjustment.fuel_flow_kg_s is not None
+                else base_input.fuel_flow_kg_s
+            ),
             mass_flow_kg_s=base_input.mass_flow_kg_s,
-            compressor_health=adjustment.compressor_efficiency
-            if adjustment.compressor_efficiency is not None
-            else base_input.compressor_health,
+            compressor_health=(
+                adjustment.compressor_efficiency
+                if adjustment.compressor_efficiency is not None
+                else base_input.compressor_health
+            ),
             combustor_health=base_input.combustor_health,
-            turbine_health=adjustment.turbine_efficiency
-            if adjustment.turbine_efficiency is not None
-            else base_input.turbine_health,
+            turbine_health=(
+                adjustment.turbine_efficiency
+                if adjustment.turbine_efficiency is not None
+                else base_input.turbine_health
+            ),
         )
         adjusted_snapshot = self._snapshot(
             adjusted_input, sensor_noise_std=adjustment.sensor_noise_std

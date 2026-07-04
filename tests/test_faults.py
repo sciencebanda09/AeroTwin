@@ -84,7 +84,9 @@ def test_summary_round_trip() -> None:
 
 
 def test_unknown_sensor_target_logs_and_skips() -> None:
-    injector = FaultInjector([FaultSpec(FaultType.SENSOR_BIAS, severity=0.5, target_sensor="Missing")])
+    injector = FaultInjector(
+        [FaultSpec(FaultType.SENSOR_BIAS, severity=0.5, target_sensor="Missing")]
+    )
     observation = {"T3": 800.0}
     result = injector.apply_to_observation(observation)
     assert result == observation
