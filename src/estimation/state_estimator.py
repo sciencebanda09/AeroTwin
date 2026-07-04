@@ -15,6 +15,9 @@ class StateEstimator:
     def update(self, health_observation: np.ndarray) -> np.ndarray:
         """Assimilate a health observation with monotonic slow degradation."""
         identity = np.eye(4)
+        previous = self.filter.state.copy()
         self.filter.predict(lambda x: np.clip(x - 1e-4, 0, 1), identity)
         state = self.filter.update(np.clip(health_observation, 0, 1), lambda x: x, identity)
-        return np.clip(state, 0, 1)
+        state = np.minimum(np.clip(state, 0, 1), previous)
+        self.filter.state = state
+        return state.copy()

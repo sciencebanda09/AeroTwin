@@ -11,4 +11,8 @@ def test_train_and_load(tmp_path) -> None:
     metrics = train_from_csv(data, model)
     assert model.exists()
     assert metrics["rmse"] >= 0
-    assert len(SurrogateModel.load(model).predict(frame.head())) == 5
+    loaded = SurrogateModel.load(model)
+    assert len(loaded.predict(frame.head())) == 5
+    prediction, lower, upper, confidence = loaded.predict_with_uncertainty(frame.head())
+    assert confidence == 0.9
+    assert ((lower <= prediction) & (prediction <= upper)).all().all()
