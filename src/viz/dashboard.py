@@ -14,6 +14,24 @@ from src.simulation.what_if import ScenarioAdjustment, ScenarioSimulator
 from src.viz.engine_animation import engine_schematic
 from src.viz.plots import health_gauge, trend
 
+
+def _estimator_feature_importances(estimator) -> list[float] | None:
+    """Return averaged feature importances for tree estimators and wrappers."""
+    if hasattr(estimator, "feature_importances_"):
+        return list(estimator.feature_importances_)
+    members = getattr(estimator, "estimators_", None)
+    if not members:
+        return None
+    nested = []
+    for member in members:
+        values = _estimator_feature_importances(member)
+        if values is not None:
+            nested.append(values)
+    if not nested:
+        return None
+    return list(pd.DataFrame(nested).mean(axis=0))
+
+
 st.set_page_config(page_title="Turbojet Digital Twin", page_icon="✈", layout="wide")
 st.title("Four-Stage Turbojet Digital Twin")
 page = st.sidebar.radio(
@@ -45,25 +63,39 @@ else:
 
         outputs = []
         for engine_id, group in data.groupby("EngineID", sort=False):
+            group = group.sort_values("Cycle").reset_index(drop=True)
             twin = DigitalTwin(str(engine_id))
             if Path(model_path).exists():
                 twin.load_model(model_path)
             result = twin.batch_predict(group)
             result["EngineID"] = engine_id
-            result["Cycle"] = group["Cycle"].reset_index(drop=True)
             outputs.append(result)
         output = pd.concat(outputs, ignore_index=True)
         output = output.loc[:, ~output.columns.duplicated()]
 
         latest = output.iloc[-1]
         latest_per_engine = output.sort_values("Cycle").groupby("EngineID", as_index=False).tail(1)
+        latest_engine_id = latest["EngineID"]
+        latest_input = data[data["EngineID"] == latest_engine_id].sort_values("Cycle").iloc[-1]
+        latest_engine_output = output[output["EngineID"] == latest_engine_id].reset_index(drop=True)
 
         if page == "Overview":
-            a, b, c, d = st.columns(4)
+            a, b, c, d, e = st.columns(5)
             a.metric("Health", f"{latest['OverallHealth']:.1%}")
             b.metric("Thrust", f"{latest['Thrust']:.0f} N")
             c.metric("RUL", f"{latest['RULCycles']:.0f} cycles")
-            d.metric("Risk", str(latest["RiskLevel"]).upper())
+            d.metric("Confidence", f"{latest['Confidence']:.0%}")
+            e.metric("Risk", str(latest["RiskLevel"]).upper())
+            op1, op2, op3, op4 = st.columns(4)
+            op1.metric("Altitude", f"{latest_input['Altitude']:.0f} m")
+            op2.metric("Mach", f"{latest_input['Mach']:.2f}")
+            op3.metric("RPM", f"{latest_input['RPM']:.0f}")
+            op4.metric("Fuel flow", f"{latest_input['FuelFlow']:.3f} kg/s")
+            h1, h2, h3, h4 = st.columns(4)
+            h1.metric("Compressor", f"{latest['CompressorHealth']:.1%}")
+            h2.metric("Combustor", f"{latest['CombustorHealth']:.1%}")
+            h3.metric("Turbine", f"{latest['TurbineHealth']:.1%}")
+            h4.metric("Degradation rate", f"{latest['DegradationRate']:.5f}/cycle")
             left, right = st.columns(2)
             with left:
                 st.plotly_chart(health_gauge(float(latest["OverallHealth"])), width="stretch")
@@ -74,6 +106,10 @@ else:
                     "TurbineHealth": float(latest["TurbineHealth"]),
                 }
                 st.plotly_chart(engine_schematic(schematic_health), width="stretch")
+            st.plotly_chart(
+                trend(latest_engine_output, ["OverallHealth", "Confidence"]),
+                width="stretch",
+            )
 
         elif page in {"Engine Health", "Performance", "RUL"}:
             columns = (
@@ -82,11 +118,10 @@ else:
                 else (
                     ["Thrust", "TSFC"]
                     if page == "Performance"
-                    else ["RULCycles", "FailureProbability"]
+                    else ["RULCycles", "FailureProbability", "DegradationRate", "Confidence"]
                 )
             )
-            single_engine = output[output["EngineID"] == latest["EngineID"]].reset_index(drop=True)
-            st.plotly_chart(trend(single_engine, columns), width="stretch")
+            st.plotly_chart(trend(latest_engine_output, columns), width="stretch")
 
         elif page == "Maintenance":
             st.subheader(str(latest["Maintenance"]))
@@ -94,7 +129,7 @@ else:
 
         elif page == "What-If Simulator":
             st.subheader("Scenario simulator")
-            baseline_row = group.iloc[-1].to_dict()
+            baseline_row = latest_input.to_dict()
             c1, c2, c3 = st.columns(3)
             fuel_flow = c1.slider(
                 "Fuel flow (kg/s)", 0.0, 5.0, float(baseline_row.get("FuelFlow", 1.0)), 0.01
@@ -105,7 +140,10 @@ else:
             )
             c4, c5, c6 = st.columns(3)
             pamb = c4.slider(
-                "Ambient pressure (Pa)", 40_000.0, 105_000.0, float(baseline_row.get("Pamb", 101_325.0))
+                "Ambient pressure (Pa)",
+                40_000.0,
+                105_000.0,
+                float(baseline_row.get("Pamb", 101_325.0)),
             )
             compressor_eff = c5.slider("Compressor efficiency", 0.3, 1.0, 1.0)
             turbine_eff = c6.slider("Turbine efficiency", 0.3, 1.0, 1.0)
@@ -149,7 +187,9 @@ else:
             specs: list[FaultSpec] = []
             for fault_name in selected_faults:
                 fault_type = FaultType(fault_name)
-                severity = st.slider(f"{fault_name} severity", 0.0, 1.0, 0.5, key=f"sev_{fault_name}")
+                severity = st.slider(
+                    f"{fault_name} severity", 0.0, 1.0, 0.5, key=f"sev_{fault_name}"
+                )
                 target = None
                 if fault_type in {FaultType.SENSOR_DRIFT, FaultType.SENSOR_BIAS}:
                     target = st.selectbox(
@@ -163,7 +203,9 @@ else:
             if Path(model_path).exists():
                 twin_with_faults.load_model(model_path)
             twin_with_faults.fault_injector = injector
-            faulted = twin_with_faults.batch_predict(group)
+            faulted = twin_with_faults.batch_predict(
+                data[data["EngineID"] == latest["EngineID"]].sort_values("Cycle")
+            )
             st.write("Predictions with active faults applied:")
             st.dataframe(faulted, width="stretch")
 
@@ -195,7 +237,9 @@ else:
                 )
                 st.write(report.summary)
                 for factor in report.factors:
-                    st.write(f"- **{factor.factor}** ({factor.contribution:+.3f}): {factor.explanation}")
+                    st.write(
+                        f"- **{factor.factor}** ({factor.contribution:+.3f}): {factor.explanation}"
+                    )
                 st.write("Causal chain:")
                 st.write(" ".join(report.causal_chain))
 
@@ -212,7 +256,9 @@ else:
             st.caption(options[0].rationale)
 
         elif page == "Fleet":
-            fleet_input = latest_per_engine.drop(columns=["engine_id"], errors="ignore").rename(columns={"EngineID": "engine_id"})
+            fleet_input = latest_per_engine.drop(columns=["engine_id"], errors="ignore").rename(
+                columns={"EngineID": "engine_id"}
+            )
             ranked = rank_fleet(fleet_input)
             st.dataframe(ranked, width="stretch")
 
@@ -226,11 +272,13 @@ else:
             else:
                 pipeline = model.pipeline
                 estimator = pipeline.steps[-1][1] if hasattr(pipeline, "steps") else pipeline
-                if hasattr(estimator, "feature_importances_"):
+                values = _estimator_feature_importances(estimator)
+                feature_names = getattr(model, "pipeline_feature_names", model.feature_names)
+                if values is not None and len(values) == len(feature_names):
                     importances = pd.DataFrame(
                         {
-                            "Feature": model.feature_names,
-                            "Importance": estimator.feature_importances_,
+                            "Feature": feature_names,
+                            "Importance": values,
                         }
                     ).sort_values("Importance", ascending=False)
                     st.bar_chart(importances.set_index("Feature"))
@@ -243,4 +291,3 @@ else:
         st.download_button("Export predictions", output.to_csv(index=False), "predictions.csv")
     except (ValueError, KeyError) as error:
         st.error(str(error))
-
