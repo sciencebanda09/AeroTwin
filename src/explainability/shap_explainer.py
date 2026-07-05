@@ -43,7 +43,11 @@ def explain_prediction(
             shap_values = explainer(frame)
             result["method"] = "shap"
             base_vals = getattr(shap_values, "base_values", None)
-            result["base_value"] = float(base_vals[0]) if base_vals is not None and hasattr(base_vals, "__len__") else 0.0
+            if base_vals is not None and hasattr(base_vals, "__len__"):
+                bv = np.asarray(base_vals[0])
+                result["base_value"] = float(bv.mean()) if bv.ndim > 0 else float(bv)
+            else:
+                result["base_value"] = 0.0
             global_imp = np.abs(shap_values.values).mean(axis=0)
             if global_imp.ndim > 1:
                 global_imp = global_imp.mean(axis=tuple(range(1, global_imp.ndim)))
