@@ -283,8 +283,8 @@ try:
             from src.explainability.shap_explainer import explain_prediction, feature_interaction_matrix
             try:
                 feature_names = getattr(model, "pipeline_feature_names", model.feature_names)
-                raw_background = output[model.feature_names].dropna().iloc[:200] if len(output) > 200 else output[model.feature_names].dropna()
-                raw_sample = output[model.feature_names].dropna().iloc[:5]
+                raw_background = data[model.feature_names].dropna().iloc[:200] if len(data) > 200 else data[model.feature_names].dropna()
+                raw_sample = data[model.feature_names].dropna().iloc[:5]
                 background = model._prepare(raw_background)
                 sample = model._prepare(raw_sample)
 
@@ -467,7 +467,7 @@ try:
             float(latest["FailureProbability"]),
         )
         options_df = pd.DataFrame([vars(o) for o in options])
-        st.dataframe(options_df.style.highlight_max(["Utility"], color="#bbf7d0"),
+        st.dataframe(options_df.style.highlight_max(["utility_score"], color="#bbf7d0"),
                      width="stretch")
         st.success(f"Top recommendation: **{options[0].action}**")
         st.caption(options[0].rationale)
