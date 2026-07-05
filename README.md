@@ -47,7 +47,7 @@ This repository implements a **production-oriented digital twin** for a four-sta
 ```mermaid
 flowchart TB
     subgraph INGEST["📥 Ingestion"]
-        A[Sensor Stream<br/>P2·T2·P3·T3·P4·T4·RPM·Fuel] --> B[Schema & Range<br/>Validation]
+        A[Sensor Stream<br/>P2·T2·P3·T3·P4·T4·RPM·Fuel] --> B["Schema & Range<br/>Validation"]
     end
 
     subgraph CORE["🧬 Digital Twin Core"]
@@ -63,7 +63,7 @@ flowchart TB
     subgraph EXPLAIN["🔍 Explainability"]
         F --> S[SHAP / Permutation<br/>Importance]
         S --> T[Global Feature<br/>Importance]
-        S --> U[Local Explanations<br/>& Interaction Matrix]
+        S --> U["Local Explanations<br/>& Interaction Matrix"]
     end
 
     subgraph INTEL["📊 Prognostics & Decisioning"]
@@ -71,7 +71,7 @@ flowchart TB
         F --> H[Failure Probability<br/>Data-Calibrated]
         F --> I[Thrust / TSFC<br/>Forecast]
         G & H & I --> J[Condition-Based<br/>Maintenance Engine]
-        J --> K[Maintenance Economics<br/>& Recommendations]
+        J --> K["Maintenance Economics<br/>& Recommendations"]
     end
 
     subgraph SERVE["🌐 Serving Layer"]
