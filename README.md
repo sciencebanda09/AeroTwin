@@ -114,7 +114,7 @@ flowchart TB
 |---|---|
 | ![Health Trajectories](docs/assets/screenshots/health_trajectories_dashboard.png) | ![Thrust TSFC Trends](docs/assets/screenshots/thrust_tsfc_trends.png) |
 
-| RUL & Failure Probability | SHAP Model Explainability |
+| RUL & Failure Probability |
 |---|---|
 | ![RUL Failure Probability](docs/assets/screenshots/rul_failure_probability_trends.png) |
 </div>
