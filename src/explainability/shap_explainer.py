@@ -17,16 +17,20 @@ def explain_prediction(
     frame: pd.DataFrame,
     feature_names: list[str] | None = None,
     background_data: pd.DataFrame | None = None,
+    model: Any = None,
 ) -> dict[str, Any]:
     """Generate per-prediction and global explanations.
 
     Args:
         predict_fn: Callable accepting a feature DataFrame and returning
-            a 2D array of predictions (samples, targets).
+            a 2D array of predictions (samples, targets). Used as fallback
+            when ``model`` is not provided.
         frame: One or more rows to explain. Must contain only the features
             in ``feature_names`` (already preprocessed if required).
         feature_names: Column names corresponding to model features.
         background_data: Optional background dataset for SHAP (uses frame if None).
+        model: Optional sklearn model/pipeline. When provided, SHAP auto-detects
+            the model type (TreeExplainer for tree models, much faster).
 
     Returns:
         Dict with ``method``, ``global_importance``, ``local_explanations``, ``base_value``.
@@ -37,8 +41,8 @@ def explain_prediction(
 
     if _HAS_SHAP:
         try:
-            explainer = shap.Explainer(predict_fn, bg, feature_names=names)
-            shap_values = explainer(frame, silent=True)
+            explainer = shap.Explainer(model or predict_fn, bg, feature_names=names)
+            shap_values = explainer(frame)
             result["method"] = "shap"
             base_vals = getattr(shap_values, "base_values", None)
             result["base_value"] = float(base_vals[0]) if base_vals is not None and hasattr(base_vals, "__len__") else 0.0
@@ -90,13 +94,18 @@ def feature_interaction_matrix(
     frame: pd.DataFrame,
     feature_names: list[str],
     max_features: int = 8,
+    model: Any = None,
 ) -> dict[str, Any]:
     """Compute SHAP interaction values for top features, if available."""
     if not _HAS_SHAP:
         return {"method": "none", "message": "SHAP not installed"}
     try:
-        explainer = shap.TreeExplainer(predict_fn)
-        interaction_values = explainer.shap_interaction_values(frame.iloc[:100])
+        if model is not None and hasattr(model, "steps"):
+            estimator = model.steps[-1][1]
+            explainer = shap.TreeExplainer(estimator)
+        else:
+            explainer = shap.TreeExplainer(predict_fn)
+        interaction_values = explainer.shap_interaction_values(frame.iloc[:50])
         if isinstance(interaction_values, list):
             interaction_values = interaction_values[0]
         n = min(interaction_values.shape[-1], max_features)

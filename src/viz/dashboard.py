@@ -292,7 +292,7 @@ try:
                     return np.asarray(model.pipeline.predict(x))
 
                 with st.spinner("Computing SHAP explanations..."):
-                    explanation = explain_prediction(predict_fn, sample, feature_names, background)
+                    explanation = explain_prediction(predict_fn, sample, feature_names, background, model=model.pipeline)
                 st.success(f"Method: {explanation['method']}")
 
                 col1, col2 = st.columns(2)
@@ -317,7 +317,7 @@ try:
                         st.dataframe(ldf, width="stretch")
 
                 with st.spinner("Computing interaction matrix..."):
-                    interaction = feature_interaction_matrix(predict_fn, background, feature_names, max_features=8)
+                    interaction = feature_interaction_matrix(predict_fn, background, feature_names, max_features=8, model=model.pipeline)
                 if interaction.get("matrix"):
                     st.markdown("**Feature Interaction Matrix (SHAP)**")
                     matrix = np.array(interaction["matrix"])
