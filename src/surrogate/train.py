@@ -99,14 +99,16 @@ def create_model(
     """
     target_scalers = {}
     if kind == "stacking":
-        final_estimator = Ridge(alpha=1.0, random_state=seed)
+        # Wrap a single-output StackingRegressor in MultiOutputRegressor so
+        # it fits one stack per target column.
         base_estimators_list = _base_estimators(seed, n_estimators)
         estimator = MultiOutputRegressor(
             StackingRegressor(
                 estimators=base_estimators_list,
-                final_estimator=MultiOutputRegressor(final_estimator),
+                final_estimator=Ridge(alpha=1.0, random_state=seed),
                 cv=5,
-            )
+            ),
+            n_jobs=1,
         )
     elif kind == "mlp":
         estimator = MLPRegressor(
