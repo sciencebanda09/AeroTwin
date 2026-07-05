@@ -116,8 +116,7 @@ flowchart TB
 
 | RUL & Failure Probability | SHAP Model Explainability |
 |---|---|
-| ![RUL Failure Probability](docs/assets/screenshots/rul_failure_probability_trends.png) | ![SHAP Explainability](docs/assets/screenshots/shap_explainability.png) |
-
+| ![RUL Failure Probability](docs/assets/screenshots/rul_failure_probability_trends.png) |
 </div>
 
 The dashboard includes **18 pages** accessible from the sidebar. Key additions beyond standard monitoring:
