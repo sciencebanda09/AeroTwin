@@ -41,7 +41,7 @@ def explain_prediction(
 
     if _HAS_SHAP:
         try:
-            explainer = shap.Explainer(model or predict_fn, bg, feature_names=names)
+            explainer = shap.Explainer(predict_fn, bg, feature_names=names)
             shap_values = explainer(frame)
             result["method"] = "shap"
             base_vals = getattr(shap_values, "base_values", None)
@@ -49,6 +49,7 @@ def explain_prediction(
             global_imp = np.abs(shap_values.values).mean(axis=0)
             if global_imp.ndim > 1:
                 global_imp = global_imp.mean(axis=tuple(range(1, global_imp.ndim)))
+            global_imp = np.nan_to_num(global_imp, nan=0.0, posinf=0.0, neginf=0.0)
             global_imp_list = global_imp.tolist() if hasattr(global_imp, "tolist") else list(global_imp)
             result["global_importance"] = [
                 {"feature": str(n), "importance": float(v)}
@@ -60,6 +61,7 @@ def explain_prediction(
                 vals = shap_values.values[i]
                 if hasattr(vals, "shape") and vals.ndim > 1:
                     vals = vals.mean(axis=-1)
+                vals = np.nan_to_num(vals, nan=0.0, posinf=0.0, neginf=0.0)
                 vals_list = vals.tolist() if hasattr(vals, "tolist") else list(vals)
                 local = [
                     {"feature": str(n), "shap_value": float(v)}
