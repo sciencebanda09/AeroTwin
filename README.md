@@ -102,6 +102,42 @@ flowchart TB
 
 ---
 
+## DigitalTwin Facade
+
+The `DigitalTwin` class (`src/digital_twin/engine.py`) is the single entry point for all predictions, state estimation, and fleet operations.
+
+```python
+from src.digital_twin.engine import DigitalTwin
+
+# Create a twin with your chosen estimator
+twin = DigitalTwin(estimator_method="ekf")  # or "ukf"
+
+# Load a trained surrogate model
+twin.load_model("models/et.joblib")
+
+# Push one observation → get health + performance + uncertainty
+result = twin.update(observation)
+# result keys: OverallHealth, CompressorHealth, CombustorHealth, TurbineHealth,
+#              RULCycles, FailureProbability, Thrust, TSFC, Confidence, RiskScore,
+#              DegradationRate, HealthStandardError, KalmanGain, Residual
+
+# Or batch-process multiple engines
+results = twin.batch_predict(dataframe)
+
+# Enable fault injection
+from src.faults.injection import FaultInjector, FaultSpec, FaultType
+twin.fault_injector = FaultInjector([
+    FaultSpec(FaultType.COMPRESSOR_FOULING, severity=0.4),
+])
+
+# Stream multiple cycles at once
+outputs = twin.stream_predict(dataframe, engine_id_col="EngineID")
+```
+
+The facade orchestrates: physics simulation → surrogate prediction → EKF/UKF filtering → RUL extrapolation → failure probability → maintenance decisioning. All outputs are serializable for API serving.
+
+---
+
 ## Dashboard Preview
 
 <div align="center">
@@ -221,8 +257,8 @@ digital_twin/
 │   ├── surrogate/             # SurrogateModel · create_model · HybridPhysicsMLModel
 │   ├── uncertainty/           # Quantile regression · conformal · adaptive conformal
 │   ├── explainability/        # SHAP explainer · root cause analysis
-│   ├── validation/            # Cross-model validation suite (new)
-│   ├── performance/           # Latency/throughput benchmarks (new)
+│   ├── validation/            # Cross-model validation suite
+│   ├── performance/           # Latency/throughput benchmarks
 │   ├── health/                # Compressor / combustor / turbine / overall health fusion
 │   ├── prediction/            # RUL · failure probability · thrust · fuel efficiency
 │   ├── maintenance/           # CBM scheduler, economics, multi-option decision engine
@@ -286,39 +322,73 @@ Test markers:
 
 ---
 
-## What-If, Fault Injection, Root Cause & Maintenance Options
+## What-If Simulator
+
+Adjust fuel flow, RPM, ambient conditions, component efficiency, or sensor noise and compare before/after health, RUL, thrust, TSFC, and root cause in a single call.
 
 ```python
 from src.simulation.what_if import ScenarioSimulator, ScenarioAdjustment
-from src.faults.injection import FaultInjector, FaultSpec, FaultType
-from src.explainability.root_cause import analyze_scenario
-from src.maintenance.decision_engine import MaintenanceDecisionEngine
 
-# What-if: raise fuel flow, drop compressor efficiency, compare before/after.
 comparison = ScenarioSimulator().run(
     baseline_observation,
     ScenarioAdjustment(fuel_flow_kg_s=1.8, compressor_efficiency=0.65),
 )
+# comparison.delta shows predicted deltas for all health + performance outputs
+```
 
-# Fault injection: propagate compressor fouling + a sensor bias through the twin.
+Available via the dashboard **What-If Simulator** page and `POST /v1/scenarios/simulate`.
+
+---
+
+## Fault Injection
+
+Six fault modes configurable per engine: compressor fouling, turbine erosion, fuel nozzle blockage, bearing wear, sensor drift, sensor bias. Faults propagate through the physics model and Kalman filter to affect all downstream predictions.
+
+```python
+from src.faults.injection import FaultInjector, FaultSpec, FaultType
+
 twin.fault_injector = FaultInjector([
     FaultSpec(FaultType.COMPRESSOR_FOULING, severity=0.4),
     FaultSpec(FaultType.SENSOR_BIAS, severity=0.3, target_sensor="T3"),
 ])
-result = twin.update(observation)
+result = twin.update(observation)  # fault-corrupted output
+```
 
-# Root cause: rank what drove the health delta.
+Faults are composable and onset-cycle-aware. Access via the dashboard **Fault Injection** page, `POST /v1/engines/{id}/faults`, and `GET /v1/engines/{id}/faults`.
+
+---
+
+## Root Cause Analysis
+
+Rank the factors driving a health delta using physics-sensitivity analysis (or SHAP when a surrogate is loaded). The `analyze_scenario` function compares baseline vs. adjusted inputs and attributes the health change to specific operating parameters.
+
+```python
+from src.explainability.root_cause import analyze_scenario
+
 report = analyze_scenario(baseline_inputs, adjusted_inputs, comparison.delta["overall_health"])
+# report["ranked_factors"] — ordered list of (parameter, contribution) pairs
+```
 
-# Maintenance options: ranked menu, not just one recommendation.
+Access via the dashboard **Root Cause Analysis** page.
+
+---
+
+## Maintenance Options
+
+Five-option CBM decision engine (Monitor, Inspect, Repair, Overhaul, Replace), each scored on cost, downtime, failure risk, and RUL gain. Options are ranked by a weighted utility function — not just a single recommendation.
+
+```python
+from src.maintenance.decision_engine import MaintenanceDecisionEngine
+
 options = MaintenanceDecisionEngine().generate_options(
     health=result["OverallHealth"],
     rul_cycles=result["RULCycles"],
     failure_probability=result["FailureProbability"],
 )
+# options[0] is the top-ranked (highest utility) recommendation
 ```
 
-All exposed via API endpoints and the Streamlit dashboard's **What-If Simulator**, **Fault Injection**, **Root Cause Analysis**, and **Maintenance Options** pages.
+Available via the dashboard **Maintenance Options** page and `POST /v1/engines/{id}/maintenance/options`.
 
 ---
 
@@ -334,9 +404,10 @@ prepped = surrogate_model._prepare(raw)
 def predict_fn(x):
     return surrogate_model.pipeline.predict(x)
 
-# Global + local explanations
+# Global + local explanations (pass model for TreeExplainer speedup)
 explanation = explain_prediction(predict_fn, prepped,
-    feature_names=surrogate_model.pipeline_feature_names)
+    feature_names=surrogate_model.pipeline_feature_names,
+    model=surrogate_model.pipeline)
 print(explanation["global_importance"])   # ranked feature list
 print(explanation["local_explanations"])  # top-10 SHAP values per row
 
@@ -399,6 +470,31 @@ Run `pipeline benchmark` to measure every model variant:
 
 ---
 
+## Fleet Analytics
+
+Rank and compare engines across the fleet using a weighted risk formula, detect degradation drift, and explore cross-engine correlations.
+
+```python
+from src.digital_twin.fleet import rank_fleet
+from src.digital_twin.runtime import DriftMonitor
+
+# Risk-ranked fleet table (uses .batch_predict internally)
+ranked = rank_fleet(twin, dataframe, engine_id_col="EngineID")
+# Returns DataFrame with Health, RUL, FailureProb, RiskScore per engine
+# RiskScore = 0.45*(1-health) + 0.40*failure_prob + 0.15*(1-RUL/max_RUL)
+
+# Drift monitoring: sliding-window residual analysis
+monitor = DriftMonitor(window_size=50, threshold=0.12)
+for obs in stream:
+    drift = monitor.update(obs, predicted, actual)
+    if drift:
+        print(f"Drift detected at cycle {obs['Cycle']}")
+```
+
+Access via the dashboard **Fleet Comparison** page and the `digital_twin.fleet` module.
+
+---
+
 ## Dataset Contract
 
 One row = one engine cycle. SI units throughout. Health values dimensionless `[0, 1]`. Full contract in [`docs/DATA.md`](docs/DATA.md).
@@ -415,6 +511,33 @@ The feature engineering step (`src/dataset/features.py`) adds 20 derived feature
 
 ---
 
+## Configuration
+
+All key parameters are set in [`config.yaml`](config.yaml):
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `model.kind` | `extra_trees` | Surrogate model type |
+| `model.n_estimators` | `300` | Number of trees / boosting rounds |
+| `physics.max_temperature_k` | `1900.0` | Turbine inlet temperature limit |
+| `physics.compressor_pressure_ratio` | `10.0` | Design-pressure ratio |
+| `runtime.drift_threshold` | `0.12` | Residual drift alert trigger |
+| `runtime.failure_health_threshold` | `0.3` | RUL = 0 when health crosses this |
+| `runtime.warning_health_threshold` | `0.7` | Early warning threshold |
+| `runtime.estimator_method` | `ekf` | State estimator (ekf or ukf) |
+| `scenario.degradation_threshold` | `0.3` | Binary degradation flag level |
+| `maintenance_engine.cost_weight` | `0.30` | Cost importance in utility scoring |
+| `maintenance_engine.downtime_weight` | `0.20` | Downtime importance |
+| `maintenance_engine.risk_weight` | `0.35` | Failure-risk importance |
+| `maintenance_engine.rul_gain_weight` | `0.15` | RUL-gain importance |
+
+Override any setting at the command line:
+```bash
+python pipeline.py train --kind hybrid --n-estimators 500
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -424,6 +547,9 @@ The feature engineering step (`src/dataset/features.py`) adds 20 derived feature
 | Dashboard page loads slowly on every navigation | Full inference pipeline re-runs on each script execution | Results now cached with `@st.cache_data` |
 | Trade-Off Analysis crashes with "unsupported format string" | Duplicate column names when y-axis equals "Thrust" | Column list deduplicated with `dict.fromkeys()` |
 | Parameter Sweep shows "not in index" | Input parameter not included in sweep result dicts | Parameter value now stored in each result entry |
+| SHAP page shows Vega-Lite "Infinite extent" error | NaN or Infinity in SHAP values | Sanitized with `np.nan_to_num` before display |
+| SHAP local explanations blank / "No per-row explanations available" | SHAP Permutation explainer failing silently; permutation-fallback loop crashing | Fallback replaced with data-deviation approximation using global importance |
+| SHAP model missing / TreeExplainer not compatible | Pipeline ColumnTransformer incompatible with TreeExplainer | Pass `predict_fn` instead of raw pipeline; falls back to Permutation explainer
 
 ---
 
