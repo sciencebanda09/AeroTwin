@@ -4,17 +4,27 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 import logging
+import numpy as np
+import pandas as pd
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from src.digital_twin.engine import DigitalTwin
 from src.explainability.root_cause import analyze_scenario
+from src.explainability.shap_explainer import explain_prediction
 from src.faults.injection import FaultInjector, FaultSpec, FaultType
 from src.maintenance.decision_engine import MaintenanceDecisionEngine
 from src.simulation.what_if import ScenarioAdjustment, ScenarioSimulator
 
 logger = logging.getLogger(__name__)
+
+
+class ExplainRequest(BaseModel):
+    """Request for model explanation of one or more sensor observations."""
+
+    observations: list["Observation"]
+    feature_names: list[str] | None = None
 
 
 class Observation(BaseModel):
@@ -101,7 +111,7 @@ def update_engine(engine_id: str, observation: Observation) -> dict[str, Any]:
 
 
 @app.post("/v1/engines/{engine_id}/batch")
-def batch_engine(engine_id: str, observations: list[Observation]) -> list[dict[str, Any]]:
+def batch_engine(engine_id: str, observations: list["Observation"]) -> list[dict[str, Any]]:
     """Run ordered batch inference."""
     return [update_engine(engine_id, item) for item in observations]
 
@@ -186,3 +196,29 @@ def maintenance_options(
         return {"engine_id": engine_id, "options": [vars(option) for option in options]}
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/v1/explain")
+def explain_predictions(request: ExplainRequest) -> dict[str, Any]:
+    """Return SHAP-based or permutation-based explanations for model predictions."""
+    try:
+        twin = twins.get("engine-1")
+        if twin is None or twin.model is None:
+            raise HTTPException(status_code=503, detail="No model loaded")
+        obs_dicts = [obs.model_dump() for obs in request.observations]
+        frame = pd.DataFrame(obs_dicts)
+        raw_features = twin.model._prepare(frame)
+
+        def predict_fn(x: pd.DataFrame) -> np.ndarray:
+            return np.asarray(twin.model.pipeline.predict(x))
+
+        explanation = explain_prediction(
+            predict_fn,
+            raw_features,
+            feature_names=request.feature_names or list(raw_features.columns),
+        )
+        return explanation
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
