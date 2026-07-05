@@ -41,3 +41,37 @@ htmlcov/
 Thumbs.db
 
 *.egg-info/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Backup files
+*.bak
+
+# Models & generated artifacts
+models/*.json
+*.metrics.json
+*.config.json
+
+# Data
+data/train_merged.csv
+data/test_merged.csv
+
+# Reports & presentations
+*.pdf
+*.pptx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
