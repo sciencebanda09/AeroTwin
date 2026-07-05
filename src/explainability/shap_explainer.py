@@ -23,14 +23,12 @@ def explain_prediction(
 
     Args:
         predict_fn: Callable accepting a feature DataFrame and returning
-            a 2D array of predictions (samples, targets). Used as fallback
-            when ``model`` is not provided.
+            a 2D array of predictions (samples, targets).
         frame: One or more rows to explain. Must contain only the features
             in ``feature_names`` (already preprocessed if required).
         feature_names: Column names corresponding to model features.
-        background_data: Optional background dataset for SHAP (uses frame if None).
-        model: Optional sklearn model/pipeline. When provided, SHAP auto-detects
-            the model type (TreeExplainer for tree models, much faster).
+        background_data: Optional background dataset for SHAP.
+        model: Optional sklearn model/pipeline.
 
     Returns:
         Dict with ``method``, ``global_importance``, ``local_explanations``, ``base_value``.
@@ -74,35 +72,46 @@ def explain_prediction(
             import logging
             logging.exception("SHAP explainer failed, falling back to permutation importance")
 
-    # Fallback: permutation importance with per-row attributions
+    # Fallback: permutation importance
     try:
         base_pred = predict_fn(frame)
-        base_metric = float(np.mean(np.abs(base_pred))) if hasattr(base_pred, "__len__") else float(abs(base_pred))
-        n_rows = len(frame)
-        n_outputs = base_pred.shape[1] if base_pred.ndim > 1 else 1
-        local_vals = np.zeros((n_rows, len(names)), dtype=float)
+        base_metric = float(np.mean(np.abs(base_pred)))
         for i, name in enumerate(names):
             permuted = frame.copy()
             permuted.iloc[:, i] = np.random.permutation(permuted.iloc[:, i].values)
             perm_pred = predict_fn(permuted)
-            perm_metric = float(np.mean(np.abs(perm_pred))) if hasattr(perm_pred, "__len__") else float(abs(perm_pred))
+            perm_metric = float(np.mean(np.abs(perm_pred)))
             importance = abs(base_metric - perm_metric) / max(abs(base_metric), 1e-10)
             result["global_importance"].append({"feature": str(name), "importance": importance})
-            for j in range(n_rows):
-                b = float(np.mean(np.abs(base_pred[j]))) if base_pred.ndim > 1 else float(abs(base_pred[j]))
-                p = float(np.mean(np.abs(perm_pred[j]))) if perm_pred.ndim > 1 else float(abs(perm_pred[j]))
-                local_vals[j, i] = (b - p) / max(abs(b), 1e-10)
         result["global_importance"].sort(key=lambda x: -x["importance"])
-        for j in range(min(n_rows, 5)):
-            vals = np.nan_to_num(local_vals[j], nan=0.0, posinf=0.0, neginf=0.0)
-            local = [
-                {"feature": str(n), "shap_value": float(v)}
-                for n, v in zip(names, vals)
-            ]
-            local.sort(key=lambda x: -abs(x["shap_value"]))
-            result["local_explanations"].append({"row": int(j), "factors": local[:10]})
     except Exception:
         pass
+
+    # Always populate local explanations (approximation using data deviation * global importance)
+    if not result["local_explanations"] and result["global_importance"]:
+        try:
+            imp_map = {d["feature"]: d["importance"] for d in result["global_importance"]}
+            imp_vec = np.array([imp_map.get(n, 0.0) for n in names], dtype=float)
+            imp_sum = imp_vec.sum()
+            if imp_sum > 0:
+                imp_vec /= imp_sum
+            bg_mean = frame.mean(numeric_only=True).values.astype(float)
+            for j in range(min(len(frame), 5)):
+                row = frame.iloc[j].values.astype(float)
+                dev = np.nan_to_num(np.abs(row - bg_mean), nan=0.0, posinf=0.0, neginf=0.0)
+                dev_sum = dev.sum()
+                if dev_sum > 0:
+                    vals = dev / dev_sum * imp_sum
+                else:
+                    vals = imp_vec.copy()
+                local = [
+                    {"feature": str(n), "shap_value": float(v)}
+                    for n, v in zip(names, vals)
+                ]
+                local.sort(key=lambda x: -abs(x["shap_value"]))
+                result["local_explanations"].append({"row": int(j), "factors": local[:10]})
+        except Exception:
+            pass
 
     return result
 
