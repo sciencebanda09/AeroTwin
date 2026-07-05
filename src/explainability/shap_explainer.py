@@ -71,12 +71,16 @@ def explain_prediction(
                 result["local_explanations"].append({"row": int(i), "factors": local[:10]})
             return result
         except Exception:
-            pass
+            import logging
+            logging.exception("SHAP explainer failed, falling back to permutation importance")
 
-    # Fallback: permutation importance
+    # Fallback: permutation importance with per-row attributions
     try:
         base_pred = predict_fn(frame)
         base_metric = float(np.mean(np.abs(base_pred))) if hasattr(base_pred, "__len__") else float(abs(base_pred))
+        n_rows = len(frame)
+        n_outputs = base_pred.shape[1] if base_pred.ndim > 1 else 1
+        local_vals = np.zeros((n_rows, len(names)), dtype=float)
         for i, name in enumerate(names):
             permuted = frame.copy()
             permuted.iloc[:, i] = np.random.permutation(permuted.iloc[:, i].values)
@@ -84,7 +88,19 @@ def explain_prediction(
             perm_metric = float(np.mean(np.abs(perm_pred))) if hasattr(perm_pred, "__len__") else float(abs(perm_pred))
             importance = abs(base_metric - perm_metric) / max(abs(base_metric), 1e-10)
             result["global_importance"].append({"feature": str(name), "importance": importance})
+            for j in range(n_rows):
+                b = float(np.mean(np.abs(base_pred[j]))) if base_pred.ndim > 1 else float(abs(base_pred[j]))
+                p = float(np.mean(np.abs(perm_pred[j]))) if perm_pred.ndim > 1 else float(abs(perm_pred[j]))
+                local_vals[j, i] = (b - p) / max(abs(b), 1e-10)
         result["global_importance"].sort(key=lambda x: -x["importance"])
+        for j in range(min(n_rows, 5)):
+            vals = np.nan_to_num(local_vals[j], nan=0.0, posinf=0.0, neginf=0.0)
+            local = [
+                {"feature": str(n), "shap_value": float(v)}
+                for n, v in zip(names, vals)
+            ]
+            local.sort(key=lambda x: -abs(x["shap_value"]))
+            result["local_explanations"].append({"row": int(j), "factors": local[:10]})
     except Exception:
         pass
 

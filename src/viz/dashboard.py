@@ -283,7 +283,7 @@ try:
             from src.explainability.shap_explainer import explain_prediction, feature_interaction_matrix
             try:
                 feature_names = getattr(model, "pipeline_feature_names", model.feature_names)
-                raw_background = data[model.feature_names].dropna().iloc[:200] if len(data) > 200 else data[model.feature_names].dropna()
+                raw_background = data[model.feature_names].dropna().iloc[:100] if len(data) > 100 else data[model.feature_names].dropna()
                 raw_sample = data[model.feature_names].dropna().iloc[:5]
                 background = model._prepare(raw_background)
                 sample = model._prepare(raw_sample)
@@ -309,12 +309,17 @@ try:
                         if not local_df.empty:
                             local_df = local_df.sort_values("shap_value", ascending=True)
                             st.bar_chart(local_df.set_index("feature"), height=400)
+                    else:
+                        st.info("No per-row explanations available. Try a different sample.")
 
                 st.markdown("**Local Explanation Details**")
-                for local in explanation["local_explanations"]:
-                    with st.expander(f"Row {local['row']}"):
-                        ldf = pd.DataFrame(local["factors"])
-                        st.dataframe(ldf, width="stretch")
+                if explanation["local_explanations"]:
+                    for local in explanation["local_explanations"]:
+                        with st.expander(f"Row {local['row']}"):
+                            ldf = pd.DataFrame(local["factors"])
+                            st.dataframe(ldf, width="stretch")
+                else:
+                    st.info("No per-row explanation details available.")
 
                 with st.spinner("Computing interaction matrix..."):
                     interaction = feature_interaction_matrix(predict_fn, background, feature_names, max_features=8, model=model.pipeline)
