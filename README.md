@@ -219,7 +219,7 @@ streamlit run src/viz/dashboard.py           # Dashboard → http://localhost:85
 | `validation` | Full validation suite (4 model kinds × 2 splits) |
 | `benchmark` | Latency/throughput/memory benchmarks |
 | `orchestrate` | End-to-end: train all → validate → benchmark |
-| `demo` | Generate synthetic data + train baseline model |
+| `demo` | Sample a slice of the real official dataset + train baseline model |
 
 ---
 
