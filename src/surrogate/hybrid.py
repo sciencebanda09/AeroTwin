@@ -20,6 +20,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.pipeline import Pipeline
 from src.dataset.loader import SENSOR_FEATURES, TARGETS
 from src.physics.cycle_model import BraytonCycle, CycleInput
 from src.surrogate.model import SurrogateModel
@@ -59,7 +60,7 @@ class HybridPhysicsMLModel:
         return self.ml_model.pipeline_feature_names
 
     @property
-    def pipeline(self) -> "Pipeline":
+    def pipeline(self) -> Pipeline:
         return self.ml_model.pipeline
 
     def _prepare(self, frame: pd.DataFrame) -> pd.DataFrame:
