@@ -34,6 +34,7 @@ class SurrogateModel:
         target_scalers: dict[str, StandardScaler] | None = None,
         quantile_model: QuantileSurrogate | None = None,
         uncertainty_mode: str = "conformal",
+        clip_predictions: bool = True,
     ) -> None:
         self.pipeline = pipeline
         self.feature_names = feature_names
@@ -43,6 +44,14 @@ class SurrogateModel:
         self.target_scalers = target_scalers or {}
         self.quantile_model = quantile_model
         self.uncertainty_mode = uncertainty_mode
+        # When False, skip the [0,1]/[0,inf) clipping in _postprocess. This
+        # MUST be False for any model whose target is a residual/delta rather
+        # than a raw physical quantity — e.g. HybridPhysicsMLModel's ML head
+        # predicts (actual - physics_baseline), which is legitimately
+        # negative for "*Health" columns. Clipping a residual to [0, 1]
+        # silently destroys the learned signal (residuals were being zeroed
+        # out whenever health degraded below the physics baseline).
+        self.clip_predictions = clip_predictions
         self._feature_importances_: np.ndarray | None = None
         self._calibration_features_: np.ndarray | None = None
         self._calibration_targets_: np.ndarray | None = None
@@ -72,6 +81,8 @@ class SurrogateModel:
 
     def _postprocess(self, values: pd.DataFrame) -> pd.DataFrame:
         out = values.copy()
+        if not self.clip_predictions:
+            return out
         for column in out.columns:
             if column.endswith("Health"):
                 out[column] = out[column].clip(0.0, 1.0)
@@ -237,11 +248,23 @@ class SurrogateModel:
             raise TypeError("artifact is not a SurrogateModel")
         for attr in ["pipeline_feature_names", "calibrator", "target_scalers",
                      "quantile_model", "uncertainty_mode", "_feature_importances_",
-                     "_calibration_features_", "_calibration_targets_"]:
+                     "_calibration_features_", "_calibration_targets_",
+                     "clip_predictions"]:
             if not hasattr(model, attr):
                 setattr(model, attr, None if attr != "uncertainty_mode" else "conformal")
                 if attr == "target_scalers":
                     setattr(model, attr, {})
                 if attr == "uncertainty_mode":
                     setattr(model, attr, "conformal")
+                if attr == "clip_predictions":
+                    setattr(model, attr, True)
+        # Backward compat: old artifacts may have EngineID/Cycle in feature_names
+        if hasattr(model, "feature_names") and "EngineID" in model.feature_names:
+            from src.dataset.loader import SENSOR_FEATURES
+            model.feature_names = SENSOR_FEATURES
+        if hasattr(model, "pipeline_feature_names") and model.pipeline_feature_names is not None:
+            old_pfn = model.pipeline_feature_names
+            stripped = [c for c in old_pfn if c not in ("EngineID", "Cycle")]
+            if len(stripped) < len(old_pfn):
+                model.pipeline_feature_names = stripped
         return model
