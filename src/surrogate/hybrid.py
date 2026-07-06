@@ -9,16 +9,24 @@ This is a powerful digital twin approach because:
 1. The physics handles condition-dependent variation
 2. The ML only needs to model the degradation signal (much simpler)
 3. The combined prediction is physically grounded and data-corrected
-4. The residual magnitude itself is a diagnostic (model mismatch → novel degradation)
+4. The residual magnitude itself is a diagnostic (model mismatch -> novel degradation)
+
+TSFC is NOT modelled as an independent hybrid target. Because TSFC = FuelFlow / Thrust
+the residual is inherently nonlinear (proportional to 1/Thrust). Instead, TSFC is
+derived *post-hoc* from the hybrid Thrust prediction and the known fuel flow.
 """
 
 from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from src.dataset.loader import FEATURES, TARGETS
+from src.dataset.loader import SENSOR_FEATURES, TARGETS
 from src.physics.cycle_model import BraytonCycle, CycleInput
 from src.surrogate.model import SurrogateModel
+
+# Targets that the ML residual model should learn.
+# TSFC is excluded because it is derived post-hoc as fuel_flow / thrust.
+HYBRID_ML_TARGETS = [t for t in TARGETS if t != "TSFC"]
 
 
 class HybridPhysicsMLModel:
@@ -28,6 +36,10 @@ class HybridPhysicsMLModel:
     (actual - physics_prediction). At inference, the combined prediction is::
 
         hybrid_prediction = physics_prediction + ml_residual_prediction
+
+    TSFC is always computed as ``fuel_flow / thrust`` after the hybrid thrust
+    prediction has been assembled, because modeling TSFC residuals directly
+    introduces a nonlinearity that degrades hybrid performance.
     """
 
     def __init__(
@@ -49,17 +61,17 @@ class HybridPhysicsMLModel:
         """Train a hybrid model by computing physics residuals first.
 
         For each row, evaluates the physics model at the same flight condition
-        (using the engine's observed condition but assuming component health = 1.0
-        for the healthy baseline), then computes::
+        (assuming fully healthy components), then computes::
 
             residual = actual - physics_prediction
 
-        The ML model is trained to predict these residuals.
+        The ML residual model is trained for HYBRID_ML_TARGETS only (TSFC is
+        excluded and derived post-hoc from thrust).
         """
         physics = BraytonCycle()
         physics_preds = _batch_physics_predict(physics, frame)
         residual_frame = frame.copy()
-        for target in TARGETS:
+        for target in HYBRID_ML_TARGETS:
             if target == "OverallHealth":
                 continue
             actual = frame[target].values.astype(float)
@@ -78,21 +90,30 @@ class HybridPhysicsMLModel:
         pipeline = Pipeline(
             [("preprocess", build_preprocessor(PIPELINE_FEATURES)), ("model", estimator)]
         )
-        ml_model.__init__(pipeline, FEATURES, TARGETS, PIPELINE_FEATURES, target_scalers={})
+        # clip_predictions=False: this model predicts residuals
+        # (actual - physics_baseline), which are legitimately negative for
+        # "*Health" columns. The default SurrogateModel postprocessing clips
+        # any "*Health" column to [0, 1], which would zero out every
+        # negative residual and destroy the learned degradation signal.
+        ml_model.__init__(
+            pipeline, SENSOR_FEATURES, HYBRID_ML_TARGETS, PIPELINE_FEATURES,
+            target_scalers={}, clip_predictions=False,
+        )
         ml_model.fit(residual_frame)
         return cls(ml_model, physics)
 
     def predict(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """Return hybrid prediction = physics + ML residual."""
+        """Return hybrid prediction = physics + ML residual (TSFC derived post-hoc)."""
         physics_preds = _batch_physics_predict(self.physics, frame)
         ml_residuals = self.ml_model.predict(frame)
         combined = physics_preds.copy()
-        for target in TARGETS:
+        for target in HYBRID_ML_TARGETS:
             if target == "OverallHealth":
                 combined[target] = _overall_from_components(combined, ml_residuals)
             else:
                 combined[target] = combined[target].values + ml_residuals[target].values
-        return combined
+        combined["TSFC"] = _derive_tsfc(frame, combined)
+        return _clip_physical(combined)
 
     def predict_with_uncertainty(
         self, frame: pd.DataFrame
@@ -103,7 +124,7 @@ class HybridPhysicsMLModel:
         point = physics_preds.copy()
         lower = physics_preds.copy()
         upper = physics_preds.copy()
-        for target in TARGETS:
+        for target in HYBRID_ML_TARGETS:
             if target == "OverallHealth":
                 continue
             point[target] = point[target].values + self.ml_model.predict(frame)[target].values
@@ -112,7 +133,10 @@ class HybridPhysicsMLModel:
         point["OverallHealth"] = _overall_from_components(point, point)
         lower["OverallHealth"] = _overall_from_components(lower, lower)
         upper["OverallHealth"] = _overall_from_components(upper, upper)
-        return point, lower, upper, confidence
+        point["TSFC"] = _derive_tsfc(frame, point)
+        lower["TSFC"] = _derive_tsfc(frame, upper)
+        upper["TSFC"] = _derive_tsfc(frame, lower)
+        return _clip_physical(point), _clip_physical(lower), _clip_physical(upper), confidence
 
     def save(self, path: str | Path) -> None:
         destination = Path(path)
@@ -128,7 +152,13 @@ class HybridPhysicsMLModel:
 
 
 def _batch_physics_predict(physics: BraytonCycle, frame: pd.DataFrame) -> pd.DataFrame:
-    """Evaluate the physics model for every row (assuming healthy components)."""
+    """Evaluate the physics model for every row assuming a *fully healthy* engine.
+
+    Component health defaults to 1.0 regardless of any ``CompressorHealth`` etc.
+    columns in *frame* — the function computes the healthy-engine baseline so
+    that the ML model learns the *residual* (actual − healthy physics), which is
+    the pure degradation signal.
+    """
     results = {t: np.zeros(len(frame)) for t in TARGETS}
     for i, (_, row) in enumerate(frame.iterrows()):
         cin = CycleInput(
@@ -138,18 +168,50 @@ def _batch_physics_predict(physics: BraytonCycle, frame: pd.DataFrame) -> pd.Dat
             ambient_pressure_pa=float(row.get("Pamb", 101325)),
             rpm=float(row.get("RPM", 80000)),
             fuel_flow_kg_s=float(row.get("FuelFlow", 0.5)),
-            compressor_health=float(row.get("CompressorHealth", 1.0)),
-            combustor_health=float(row.get("CombustorHealth", 1.0)),
-            turbine_health=float(row.get("TurbineHealth", 1.0)),
+            compressor_health=1.0,
+            combustor_health=1.0,
+            turbine_health=1.0,
         )
         state = physics.evaluate(cin)
-        results["CompressorHealth"][i] = cin.compressor_health
-        results["CombustorHealth"][i] = cin.combustor_health
-        results["TurbineHealth"][i] = cin.turbine_health
+        results["CompressorHealth"][i] = 1.0
+        results["CombustorHealth"][i] = 1.0
+        results["TurbineHealth"][i] = 1.0
         results["Thrust"][i] = state.thrust_n
         results["TSFC"][i] = state.tsfc_kg_n_s
     results["OverallHealth"] = np.ones(len(frame))
     return pd.DataFrame(results, index=frame.index)
+
+
+def _clip_physical(values: pd.DataFrame) -> pd.DataFrame:
+    """Clip the FINAL combined (physics + residual) prediction to physical bounds.
+
+    This must only be applied to the combined output, never to the raw ML
+    residual — residuals are legitimately negative for "*Health" columns
+    (see HybridPhysicsMLModel.train docstring and SurrogateModel.clip_predictions).
+    """
+    out = values.copy()
+    for column in out.columns:
+        if column.endswith("Health"):
+            out[column] = out[column].clip(0.0, 1.0)
+        elif column in {"Thrust", "TSFC"}:
+            out[column] = out[column].clip(lower=0.0)
+    return out
+
+
+def _derive_tsfc(frame: pd.DataFrame, thrust_preds: pd.DataFrame) -> pd.Series:
+    """Derive TSFC = FuelFlow / Thrust from known fuel flow and predicted thrust.
+
+    TSFC is not modelled as an independent hybrid residual target (see module
+    docstring): because TSFC = FuelFlow / Thrust, an additive residual on TSFC
+    is nonlinear in Thrust and degrades badly under the physics+ML residual
+    scheme. Instead it is always derived post-hoc from the (known) FuelFlow
+    input and the model's own Thrust prediction, guarding against
+    division-by-zero / negative thrust with a small epsilon floor.
+    """
+    fuel_flow = frame["FuelFlow"].values.astype(float)
+    thrust = thrust_preds["Thrust"].values.astype(float)
+    safe_thrust = np.maximum(thrust, 1e-6)
+    return pd.Series(fuel_flow / safe_thrust, index=frame.index)
 
 
 def _overall_from_components(
