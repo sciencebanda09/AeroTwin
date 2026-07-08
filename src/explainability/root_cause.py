@@ -127,7 +127,9 @@ def shap_feature_importance(model: Any, frame: Any) -> list[ContributingFactor] 
         logger.info("shap not installed; skipping SHAP-based root cause ranking")
         return None
     pipeline = getattr(model, "pipeline", None)
-    estimator = pipeline.steps[-1][1] if pipeline is not None and hasattr(pipeline, "steps") else pipeline
+    estimator = (
+        pipeline.steps[-1][1] if pipeline is not None and hasattr(pipeline, "steps") else pipeline
+    )
     try:
         explainer = shap.TreeExplainer(estimator)
         values = explainer.shap_values(frame)
