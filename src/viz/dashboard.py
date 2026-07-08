@@ -407,17 +407,27 @@ try:
 
     elif page == "Flight Playback":
         st.subheader("Flight Playback")
-        st.markdown("Replay an entire engine run from startup to shutdown. RPM changes, temperatures rise, health colours update, and faults appear in real time.")
+        st.markdown(
+            "Replay an entire engine run from startup to shutdown. RPM changes, temperatures rise, health colours update, and faults appear in real time."
+        )
 
         engines = sorted(data["EngineID"].unique())
         playback_engine = st.selectbox("Select engine", engines, key="playback_engine")
-        eng_data = data[data["EngineID"] == playback_engine].sort_values("Cycle").reset_index(drop=True)
-        eng_output = output[output["EngineID"] == playback_engine].sort_values("Cycle").reset_index(drop=True)
+        eng_data = (
+            data[data["EngineID"] == playback_engine].sort_values("Cycle").reset_index(drop=True)
+        )
+        eng_output = (
+            output[output["EngineID"] == playback_engine]
+            .sort_values("Cycle")
+            .reset_index(drop=True)
+        )
 
         col1, col2 = st.columns(2)
         max_cycle = int(eng_output["Cycle"].max())
         cycle_start = col1.number_input("Start cycle", 0, max_cycle, 0, key="pb_start")
-        cycle_end = col2.number_input("End cycle", cycle_start + 1, max_cycle, max_cycle, key="pb_end")
+        cycle_end = col2.number_input(
+            "End cycle", cycle_start + 1, max_cycle, max_cycle, key="pb_end"
+        )
 
         cycle_mask = eng_output["Cycle"].between(cycle_start, cycle_end)
         trimmed_output = eng_output[cycle_mask].reset_index(drop=True)
@@ -429,7 +439,11 @@ try:
                 "CombustorHealth": float(trimmed_output.iloc[-1]["CombustorHealth"]),
                 "TurbineHealth": float(trimmed_output.iloc[-1]["TurbineHealth"]),
             }
-            pb_latest = data[data["EngineID"] == playback_engine].sort_values("Cycle").iloc[cycle_end] if cycle_end < len(data[data["EngineID"] == playback_engine]) else eng_data.iloc[-1]
+            pb_latest = (
+                data[data["EngineID"] == playback_engine].sort_values("Cycle").iloc[cycle_end]
+                if cycle_end < len(data[data["EngineID"] == playback_engine])
+                else eng_data.iloc[-1]
+            )
             render_3d_engine(
                 pb_health,
                 latest_input=pb_latest,
@@ -440,7 +454,9 @@ try:
                 height=650,
             )
         else:
-            st.info("Select an engine and cycle range, then click **Launch Playback** to start the 3D replay.")
+            st.info(
+                "Select an engine and cycle range, then click **Launch Playback** to start the 3D replay."
+            )
 
     elif page == "Trade-Off Analysis":
         st.subheader("Design Trade-Off Analysis")
