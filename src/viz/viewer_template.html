@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turbojet Digital Twin - 3D Viewer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a1a2e;font-family:'Segoe UI',system-ui,sans-serif;color:#e0e0e0;transition:background .3s,color .3s}
+#container{width:100%;height:100%;position:relative}
+canvas{display:block}
+.toolbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;z-index:10;background:rgba(30,30,50,0.85);backdrop-filter:blur(8px);padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)}
+.toolbar button{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#c8d0e0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:.2s;white-space:nowrap}
+.toolbar button:hover{background:rgba(255,255,255,0.18);color:#fff}
+.toolbar button.active{background:#4a6cf7;border-color:#4a6cf7;color:#fff}
+.toolbar button.active:hover{background:#5b7df8}
+.slider-panel{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);display:none;gap:14px;flex-wrap:wrap;justify-content:center;z-index:10;background:rgba(30,30,50,0.9);backdrop-filter:blur(8px);padding:12px 20px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);min-width:280px}
+.slider-panel.visible{display:flex}
+.slider-group{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:120px}
+.slider-group label{font-size:11px;color:#8899bb}
+.slider-group input[type=range]{width:100%;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+.slider-group input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#4a6cf7;cursor:pointer}
+.slider-group .value{font-size:12px;color:#c8d0e0;font-weight:600}
+#tooltip{position:absolute;display:none;z-index:20;background:rgba(20,20,40,0.92);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 14px;font-size:13px;pointer-events:none;max-width:260px;line-height:1.5}
+#tooltip .name{color:#7a8cff;font-weight:600;font-size:14px}
+#tooltip .row{display:flex;justify-content:space-between;gap:18px}
+#tooltip .label{color:#8899bb}
+#tooltip .val{color:#e0e0e0;font-weight:500}
+#legend{position:absolute;bottom:120px;right:16px;z-index:10;background:rgba(30,30,50,0.88);backdrop-filter:blur(8px);border-radius:8px;border:1px solid rgba(255,255,255,0.08);padding:10px 14px;font-size:12px;min-width:100px;transition:.2s}
+#legend.collapsed{width:36px;overflow:hidden;padding:8px;cursor:pointer}
+#legend .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;cursor:pointer}
+#legend .header span{color:#8899bb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+#legend .item{display:flex;align-items:center;gap:8px;padding:2px 0}
+#legend .swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+#legend .lbl{color:#c8d0e0}
+#sensor-detail{position:absolute;display:none;z-index:20;background:rgba(20,20,40,0.95);backdrop-filter:blur(8px);border:1px solid #4a6cf7;border-radius:10px;padding:14px 18px;font-size:13px;min-width:200px;max-width:300px;pointer-events:none}
+#sensor-detail .title{color:#7a8cff;font-weight:600;font-size:15px;margin-bottom:6px}
+#sensor-detail .row{display:flex;justify-content:space-between;gap:14px;padding:2px 0}
+#sensor-detail .section{color:#8899bb;font-size:11px;margin-top:6px;border-top:1px solid rgba(255,255,255,0.08);padding-top:4px}
+#replay-bar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:none;z-index:10;background:rgba(30,30,50,0.9);backdrop-filter:blur(8px);padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);align-items:center;gap:10px;min-width:420px}
+#replay-bar.visible{display:flex}
+#replay-bar button{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#c8d0e0;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px}
+#replay-bar button:hover{background:rgba(255,255,255,0.18)}
+#replay-bar input[type=range]{flex:1;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.15);border-radius:2px;outline:none}
+#replay-bar input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#4a6cf7;cursor:pointer}
+#replay-bar .time{font-size:11px;color:#8899bb;min-width:80px;text-align:center}
+.camera-presets{display:flex;gap:4px}
+.camera-presets button{font-size:10px;padding:3px 7px}
+#loadingOverlay{position:absolute;top:0;left:0;width:100%;height:100%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;z-index:100;transition:opacity .5s;pointer-events:none}
+#loadingOverlay.hidden{opacity:0}
+#loadingOverlay .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,0.1);border-top-color:#4a6cf7;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#hud{position:absolute;top:60px;left:16px;z-index:10;background:rgba(30,30,50,0.85);backdrop-filter:blur(8px);border-radius:8px;border:1px solid rgba(255,255,255,0.08);padding:10px 14px;font-size:11px;min-width:150px;pointer-events:none;display:none}
+#hud.visible{display:block}
+#hud .title{color:#7a8cff;font-weight:600;font-size:12px;margin-bottom:4px}
+#hud .row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+#hud .hlabel{color:#8899bb}
+#hud .hval{color:#e0e0e0;font-weight:500}
+#measureOverlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;pointer-events:none}
+#measureInfo{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);background:rgba(30,30,50,0.9);backdrop-filter:blur(8px);padding:6px 14px;border-radius:8px;font-size:12px;border:1px solid rgba(255,255,255,0.08);display:none;z-index:10;white-space:nowrap}
+/* Light theme overrides */
+body.light-theme{background:#e8ecf1;color:#1e293b}
+body.light-theme #container .toolbar{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1)}
+body.light-theme .toolbar button{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.1);color:#334155}
+body.light-theme .toolbar button:hover{background:rgba(0,0,0,0.1)}
+body.light-theme .toolbar button.active{background:#4a6cf7;border-color:#4a6cf7;color:#fff}
+body.light-theme .slider-panel{background:rgba(255,255,255,0.95);border-color:rgba(0,0,0,0.1)}
+body.light-theme .slider-group label{color:#64748b}
+body.light-theme .slider-group .value{color:#334155}
+body.light-theme #tooltip{background:rgba(255,255,255,0.95);border-color:rgba(0,0,0,0.12);color:#1e293b}
+body.light-theme #tooltip .name{color:#4a6cf7}
+body.light-theme #tooltip .label{color:#64748b}
+body.light-theme #tooltip .val{color:#1e293b}
+body.light-theme #legend{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1)}
+body.light-theme #legend .header span{color:#64748b}
+body.light-theme #legend .lbl{color:#334155}
+body.light-theme #replay-bar{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1)}
+body.light-theme #replay-bar button{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.1);color:#334155}
+body.light-theme #replay-bar .time{color:#64748b}
+body.light-theme #hud{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1)}
+body.light-theme #hud .hlabel{color:#64748b}
+body.light-theme #hud .hval{color:#1e293b}
+body.light-theme #hud .title{color:#4a6cf7}
+body.light-theme #sensor-detail{background:rgba(255,255,255,0.95);border-color:#4a6cf7;color:#1e293b}
+body.light-theme #sensor-detail .title{color:#4a6cf7}
+body.light-theme #sensor-detail .section{color:#64748b}
+body.light-theme #loadingOverlay{background:#e8ecf1}
+</style>
+</head>
+<body>
+<div id="loadingOverlay"><div class="spinner"></div></div>
+<div id="container">
+  <div class="toolbar" id="toolbar"></div>
+  <div class="slider-panel" id="sliderPanel"></div>
+  <div id="tooltip"></div>
+  <div id="hud">
+    <div class="title">Engine Status</div>
+    <div class="row"><span class="hlabel">RPM</span><span class="hval" id="hudRpm">--</span></div>
+    <div class="row"><span class="hlabel">Thrust</span><span class="hval" id="hudThrust">--</span></div>
+    <div class="row"><span class="hlabel">T4 Combustor</span><span class="hval" id="hudT4">--</span></div>
+    <div class="row"><span class="hlabel">T5 Exhaust</span><span class="hval" id="hudT5">--</span></div>
+    <div class="row"><span class="hlabel">P3 Compressor</span><span class="hval" id="hudP3">--</span></div>
+    <div class="row"><span class="hlabel">Fuel Flow</span><span class="hval" id="hudFuel">--</span></div>
+  </div>
+  <div id="legend">
+    <div class="header"><span>Health</span><span id="legendToggle" style="font-size:14px;cursor:pointer">−</span></div>
+    <div id="legendBody"></div>
+  </div>
+  <div id="sensor-detail"></div>
+  <div id="measureInfo">Click first point</div>
+  <div id="replay-bar">
+    <button id="replayPlayBtn">▶</button>
+    <button id="replayRestartBtn">⏮</button>
+    <input type="range" id="replaySeek" min="0" max="100" value="0">
+    <span class="time" id="replayTime">Cycle 0 / 0</span>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  meshes: {},
+  stageMeshes: {casing:null, compressor:null, combustor:null, turbine:null},
+  stageGroups: {},
+  sensorMarkers: [],
+  sensorGroup: null,
+  data: null,
+  exploded: 0,
+  casingOpacity: 0.12,
+  clipX: -9999, clipY: -9999, clipZ: -9999,
+  clipActive: false,
+  rotating: true,
+  showSensors: true,
+  showHeatmap: true,
+  animating: false,
+  faults: {},
+  replayData: null,
+  replayIdx: 0,
+  replayPlaying: false,
+  replayDuration: 0,
+  healthAnchors: [
+    { threshold: 0.85, color: [0.2, 0.85, 0.2] },
+    { threshold: 0.60, color: [0.85, 0.80, 0.15] },
+    { threshold: 0.35, color: [0.95, 0.50, 0.10] },
+    { threshold: 0.00, color: [0.85, 0.15, 0.15] },
+  ],
+  healthLabels: [
+    { threshold: 0.85, label: 'Healthy' },
+    { threshold: 0.60, label: 'Warning' },
+    { threshold: 0.35, label: 'Critical' },
+    { threshold: 0.00, label: 'Failed' },
+  ],
+  cameraPresets: {
+    isometric:  { pos: [6000,-4000,2000], target: [0,0,0] },
+    front:      { pos: [7000,0,0],        target: [0,0,0] },
+    rear:       { pos: [-7000,0,0],       target: [0,0,0] },
+    left:       { pos: [0,6000,0],        target: [0,0,0] },
+    right:      { pos: [0,-6000,0],       target: [0,0,0] },
+    top:        { pos: [0,0,6000],        target: [0,0,0] },
+    bottom:     { pos: [0,0,-6000],       target: [0,0,0] },
+  },
+  theme: 'dark',
+  measureMode: false,
+  measurePoints: [],
+  measureLine: null,
+  measureLabels: [],
+};
+
+// ============================================================
+// DATA INJECTION
+// ============================================================
+const ENGINE_DATA = {{GEOJSON}};
+
+// ============================================================
+// THREE.JS SETUP
+// ============================================================
+const container = document.getElementById('container');
+const w = container.clientWidth, h = container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(w, h);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(w, h);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(35, w/h, 10, 50000);
+camera.position.set(6000, -4000, 2500);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 500;
+controls.maxDistance = 30000;
+controls.update();
+
+// ============================================================
+// LIGHTING
+// ============================================================
+const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffeedd, 2.0);
+dirLight.position.set(5000, 4000, 5000);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+fillLight.position.set(-3000, -2000, 2000);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+rimLight.position.set(-2000, 1000, -3000);
+scene.add(rimLight);
+
+const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x1a1a2e, 0.4);
+scene.add(hemiLight);
+
+// ============================================================
+// HEALTH COLOR — configurable thresholds
+// ============================================================
+function healthColor(value) {
+  for (let i = 0; i < state.healthAnchors.length - 1; i++) {
+    const hi = state.healthAnchors[i];
+    const lo = state.healthAnchors[i + 1];
+    if (value > hi.threshold) continue;
+    if (value <= lo.threshold) return new THREE.Color(...lo.color);
+    const t = (value - lo.threshold) / (hi.threshold - lo.threshold);
+    const c = [
+      lo.color[0] + t * (hi.color[0] - lo.color[0]),
+      lo.color[1] + t * (hi.color[1] - lo.color[1]),
+      lo.color[2] + t * (hi.color[2] - lo.color[2]),
+    ];
+    return new THREE.Color(c[0], c[1], c[2]);
+  }
+  return new THREE.Color(...state.healthAnchors[0].color);
+}
+
+function healthHex(value) {
+  return '#' + healthColor(value).getHexString();
+}
+
+function getHealthLabel(value) {
+  for (const a of state.healthLabels) {
+    if (value >= a.threshold) return a.label;
+  }
+  return 'Failed';
+}
+
+// ============================================================
+// BUILD SCENE FROM DATA
+// ============================================================
+let animMixers = [];
+let clock = new THREE.Clock();
+
+function buildScene(data) {
+  state.data = data;
+
+  // Apply configurable thresholds from data
+  if (data.healthThresholds && data.healthThresholds.length) {
+    state.healthAnchors = data.healthThresholds.map(t => ({
+      threshold: t.threshold,
+      color: t.color,
+    }));
+    state.healthLabels = data.healthThresholds.map(t => ({
+      threshold: t.threshold,
+      label: t.label || '',
+    }));
+  }
+
+  const health = data.health || {};
+  const stages = data.stages || {};
+
+  for (const [name, stageData] of Object.entries(stages)) {
+    const verts = stageData.vertices;
+    const faces = stageData.faces;
+    if (!verts || !faces) continue;
+
+    const geometry = new THREE.BufferGeometry();
+    const pos = new Float32Array(verts.length * 3);
+    for (let i = 0; i < verts.length; i++) {
+      pos[i*3] = verts[i][0];
+      pos[i*3+1] = verts[i][1];
+      pos[i*3+2] = verts[i][2];
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+    const idx = new Uint32Array(faces.length * 3);
+    for (let i = 0; i < faces.length; i++) {
+      idx[i*3] = faces[i][0];
+      idx[i*3+1] = faces[i][1];
+      idx[i*3+2] = faces[i][2];
+    }
+    geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+    geometry.computeVertexNormals();
+
+    const stageHealth = name === 'casing' ? 1.0 : (health[name] ?? 0.5);
+    const hColor = healthColor(stageHealth);
+    const colors = new Float32Array(verts.length * 3);
+    for (let i = 0; i < verts.length; i++) {
+      colors[i*3] = hColor.r;
+      colors[i*3+1] = hColor.g;
+      colors[i*3+2] = hColor.b;
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const isCasing = name === 'casing';
+    const opacity = isCasing ? state.casingOpacity : 1.0;
+
+    const material = new THREE.MeshPhysicalMaterial({
+      vertexColors: true,
+      metalness: isCasing ? 0.2 : 0.4,
+      roughness: isCasing ? 0.6 : 0.3,
+      opacity: opacity,
+      transparent: isCasing,
+      side: THREE.DoubleSide,
+      envMapIntensity: 0.6,
+      clearcoat: isCasing ? 0.1 : 0.2,
+      clearcoatRoughness: 0.4,
+      clipShadows: true,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = {
+      stageName: name,
+      baseHealth: stageHealth,
+      health: stageHealth,
+    };
+
+    const group = new THREE.Group();
+    group.add(mesh);
+    scene.add(group);
+
+    state.stageGroups[name] = group;
+    state.stageMeshes[name] = mesh;
+
+    // Use computed explode offsets from data or fall back to defaults
+    const offsets = (data.explodeOffsets && data.explodeOffsets[name]) || [0, 0, 0];
+    group.userData.explodeDir = offsets;
+  }
+
+  buildLegend();
+  buildToolbar();
+  buildSensors(data.sensors);
+
+  // Apply initial health
+  updateHealth(health);
+
+  // Hide loading overlay
+  setTimeout(() => {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }, 200);
+}
+
+// ============================================================
+// UPDATE HEALTH COLORS
+// ============================================================
+function updateHealth(health) {
+  for (const [name, mesh] of Object.entries(state.stageMeshes)) {
+    if (!mesh || name === 'casing') continue;
+    const hVal = health[name] ?? 0.5;
+    const c = healthColor(hVal);
+    const colors = mesh.geometry.attributes.color.array;
+    for (let i = 0; i < colors.length / 3; i++) {
+      colors[i*3] = c.r;
+      colors[i*3+1] = c.g;
+      colors[i*3+2] = c.b;
+    }
+    mesh.geometry.attributes.color.needsUpdate = true;
+    mesh.userData.health = hVal;
+  }
+}
+
+// ============================================================
+// EXPLODED VIEW
+// ============================================================
+function setExploded(value) {
+  state.exploded = value;
+  for (const [name, group] of Object.entries(state.stageGroups)) {
+    const dir = group.userData.explodeDir || [0, 0, 0];
+    const scale = value / 100;
+    group.position.set(dir[0] * scale, dir[1] * scale, dir[2] * scale);
+  }
+}
+
+// ============================================================
+// TRANSPARENCY
+// ============================================================
+function setCasingOpacity(value) {
+  state.casingOpacity = value;
+  const mesh = state.stageMeshes.casing;
+  if (mesh) {
+    mesh.material.opacity = value;
+    mesh.material.transparent = value < 1;
+    mesh.material.needsUpdate = true;
+  }
+}
+
+// ============================================================
+// CLIPPING PLANES
+// ============================================================
+let clipPlaneObjects = [];
+
+function updateClip(axis, value) {
+  if (axis === 'x') state.clipX = value;
+  else if (axis === 'y') state.clipY = value;
+  else if (axis === 'z') state.clipZ = value;
+
+  state.clipActive = (state.clipX > -8000 || state.clipY > -8000 || state.clipZ > -8000);
+
+  const planes = [];
+  if (state.clipX > -8000) {
+    planes.push(new THREE.Plane(new THREE.Vector3(1, 0, 0), state.clipX));
+  }
+  if (state.clipY > -8000) {
+    planes.push(new THREE.Plane(new THREE.Vector3(0, 1, 0), state.clipY));
+  }
+  if (state.clipZ > -8000) {
+    planes.push(new THREE.Plane(new THREE.Vector3(0, 0, 1), state.clipZ));
+  }
+
+  for (const mesh of Object.values(state.stageMeshes)) {
+    if (mesh) {
+      mesh.material.clippingPlanes = planes;
+      mesh.material.needsUpdate = true;
+    }
+  }
+}
+
+// ============================================================
+// CAMERA PRESETS
+// ============================================================
+let cameraTween = null;
+
+function flyCamera(targetPos, targetTarget, duration = 400) {
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const endPos = new THREE.Vector3(...targetPos);
+  const endTarget = new THREE.Vector3(...targetTarget);
+  const startTime = performance.now();
+
+  cameraTween = () => {
+    const t = Math.min((performance.now() - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    camera.position.lerpVectors(startPos, endPos, ease);
+    controls.target.lerpVectors(startTarget, endTarget, ease);
+    controls.update();
+    if (t >= 1) cameraTween = null;
+  };
+}
+
+// ============================================================
+// SENSOR MARKERS
+// ============================================================
+function buildSensors(sensors) {
+  if (!sensors) return;
+  const sg = new THREE.Group();
+  sg.name = 'sensors';
+  state.sensorGroup = sg;
+
+  for (const [id, s] of Object.entries(sensors)) {
+    const pos = s.position || [0, 0, 0];
+    const geom = new THREE.SphereGeometry(60, 16, 16);
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: 0x4a6cf7,
+      emissive: 0x4a6cf7,
+      emissiveIntensity: 0.3,
+      metalness: 0.3,
+      roughness: 0.4,
+    });
+    const sphere = new THREE.Mesh(geom, mat);
+    sphere.position.set(pos[0], pos[1], pos[2]);
+    sphere.userData.sensorId = id;
+    sphere.userData.sensor = s;
+    sg.add(sphere);
+
+    const labelText = s.value !== undefined
+      ? `${s.label || id}: ${s.value} ${s.unit || ''}`
+      : (s.label || id);
+    const labelDiv = document.createElement('div');
+    labelDiv.textContent = labelText;
+    labelDiv.style.cssText = 'color:#7a8cff;font-size:10px;background:rgba(0,0,0,0.5);padding:2px 6px;border-radius:4px;pointer-events:none;white-space:nowrap';
+    const label = new CSS2DObject(labelDiv);
+    label.position.set(pos[0], pos[1] + 120, pos[2]);
+    label.userData.sensorId = id;
+    sg.add(label);
+
+    state.sensorMarkers.push(sphere);
+  }
+
+  scene.add(sg);
+}
+
+// ============================================================
+// UPDATE SENSOR VALUES
+// ============================================================
+function updateSensorValues(sensors) {
+  if (!state.sensorGroup || !sensors) return;
+  // Update marker emissive intensity based on value within range
+  for (const child of state.sensorGroup.children) {
+    if (child.isMesh) {
+      const sid = child.userData.sensorId;
+      const sData = sensors[sid];
+      if (sData && sData.value !== undefined) {
+        child.userData.sensor = sData;
+        const range = sData.valid_range;
+        let norm = 0.5;
+        if (range && range[1] > range[0]) {
+          norm = Math.max(0, Math.min(1, (sData.value - range[0]) / (range[1] - range[0])));
+        }
+        child.material.emissiveIntensity = 0.2 + norm * 0.6;
+        // Color: blue for normal, orange for high
+        if (norm > 0.85) {
+          child.material.color.setHex(0xf59e0b);
+          child.material.emissive.setHex(0xf59e0b);
+        } else if (norm < 0.1) {
+          child.material.color.setHex(0xef4444);
+          child.material.emissive.setHex(0xef4444);
+        } else {
+          child.material.color.setHex(0x4a6cf7);
+          child.material.emissive.setHex(0x4a6cf7);
+        }
+      }
+    }
+    // Update label
+    if (child.isCSS2DObject) {
+      const sid = child.userData.sensorId;
+      const sData = sensors[sid];
+      if (sData) {
+        const labelText = sData.value !== undefined
+          ? `${sData.label || sid}: ${sData.value} ${sData.unit || ''}`
+          : (sData.label || sid);
+        child.element.textContent = labelText;
+      }
+    }
+  }
+}
+
+// ============================================================
+// FAULT HIGHLIGHTING
+// ============================================================
+function setFaults(faults) {
+  state.faults = faults || {};
+}
+
+// ============================================================
+// TOOLTIP
+// ============================================================
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(text, x, y) {
+  tooltip.innerHTML = text;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (x + 14) + 'px';
+  tooltip.style.top = (y - 10) + 'px';
+}
+
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+
+// Mouse move for hover
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+renderer.domElement.addEventListener('mousemove', (event) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = Object.values(state.stageMeshes).filter(Boolean);
+  const intersects = raycaster.intersectObjects(meshes, false);
+
+  let found = false;
+  for (const hit of intersects) {
+    const ud = hit.object.userData;
+    if (ud.stageName && ud.stageName !== 'casing') {
+      const h = ud.health ?? 0.5;
+      const healthLabel = getHealthLabel(h);
+      showTooltip(
+        `<div class="name">${ud.stageName.charAt(0).toUpperCase() + ud.stageName.slice(1)}</div>` +
+        `<div class="row"><span class="label">Health</span><span class="val" style="color:${healthHex(h)}">${(h*100).toFixed(0)}%</span></div>` +
+        `<div class="row"><span class="label">Status</span><span class="val">${healthLabel}</span></div>`,
+        event.clientX, event.clientY
+      );
+      found = true;
+      break;
+    }
+  }
+
+  if (!found && state.sensorMarkers.length && state.sensorGroup && state.sensorGroup.visible) {
+    const sensorIntersects = raycaster.intersectObjects(state.sensorMarkers);
+    if (sensorIntersects.length) {
+      const s = sensorIntersects[0].object.userData.sensor;
+      if (s) {
+        const val = s.value !== undefined ? s.value : '--';
+        const range = s.valid_range ? `${s.valid_range[0]}-${s.valid_range[1]}` : '--';
+        showTooltip(
+          `<div class="name">${s.label}</div>` +
+          `<div class="row"><span class="label">Value</span><span class="val">${val} ${s.unit || ''}</span></div>` +
+          `<div class="row"><span class="label">Range</span><span class="val">${range}</span></div>`,
+          event.clientX, event.clientY
+        );
+        found = true;
+      }
+    }
+  }
+
+  if (!found) hideTooltip();
+});
+
+// ============================================================
+// DOUBLE-CLICK TO FOCUS
+// ============================================================
+renderer.domElement.addEventListener('dblclick', (event) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  const mv = new THREE.Vector2(mx, my);
+  raycaster.setFromCamera(mv, camera);
+  const allMeshes = Object.values(state.stageMeshes).filter(Boolean);
+  const hits = raycaster.intersectObjects(allMeshes, false);
+  if (hits.length > 0) {
+    const hit = hits[0].object;
+    if (hit.userData.stageName) {
+      const box = new THREE.Box3().setFromObject(hit);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const dist = Math.max(size.x, size.y, size.z) * 1.8;
+      const dir = camera.position.clone().sub(center).normalize();
+      const newPos = center.clone().add(dir.multiplyScalar(Math.max(dist, 800)));
+      flyCamera([newPos.x, newPos.y, newPos.z], [center.x, center.y, center.z], 350);
+    }
+  }
+});
+
+// ============================================================
+// SENSOR CLICK — show detail panel
+// ============================================================
+renderer.domElement.addEventListener('click', (event) => {
+  if (state.measureMode) return;
+  const panel = document.getElementById('sensor-detail');
+  if (!state.sensorMarkers.length) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  const mv = new THREE.Vector2(mx, my);
+  raycaster.setFromCamera(mv, camera);
+  const hits = raycaster.intersectObjects(state.sensorMarkers);
+  if (hits.length) {
+    const s = hits[0].object.userData.sensor;
+    const sid = hits[0].object.userData.sensorId;
+    if (s) {
+      const val = s.value !== undefined ? s.value : '--';
+      const range = s.valid_range ? `${s.valid_range[0]} - ${s.valid_range[1]} ${s.unit || ''}` : '--';
+      const pct = (s.valid_range && s.value !== undefined && s.valid_range[1] > s.valid_range[0])
+        ? ((s.value - s.valid_range[0]) / (s.valid_range[1] - s.valid_range[0]) * 100).toFixed(0) + '%'
+        : '--';
+      panel.innerHTML = `
+        <div class="title">${s.label || sid}</div>
+        <div class="row"><span>Value</span><span><strong>${val}</strong> ${s.unit || ''}</span></div>
+        <div class="row"><span>Range</span><span>${range}</span></div>
+        <div class="row"><span>Normalized</span><span>${pct}</span></div>
+        <div class="section">${s.stage ? 'Stage: ' + s.stage : ''}</div>
+      `;
+      panel.style.display = 'block';
+      panel.style.left = Math.min(event.clientX + 16, window.innerWidth - 310) + 'px';
+      panel.style.top = Math.min(event.clientY - 10, window.innerHeight - 200) + 'px';
+      // Auto-hide after 4s
+      if (panel._hideTimer) clearTimeout(panel._hideTimer);
+      panel._hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 4000);
+      return;
+    }
+  }
+  // Only hide if not hovering over panel
+  if (!panel.contains(event.target)) {
+    panel.style.display = 'none';
+  }
+});
+
+// ============================================================
+// LEGEND
+// ============================================================
+let legendCollapsed = false;
+
+function buildLegend() {
+  const body = document.getElementById('legendBody');
+  body.innerHTML = '';
+  for (const a of state.healthAnchors) {
+    const item = document.createElement('div');
+    item.className = 'item';
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch';
+    const c = a.color;
+    swatch.style.background = `rgb(${c[0]*255|0},${c[1]*255|0},${c[2]*255|0})`;
+    const lbl = document.createElement('span');
+    lbl.className = 'lbl';
+    const label = state.healthLabels.find(l => l.threshold === a.threshold);
+    lbl.textContent = `${label ? label.label : ''} (\u2265${(a.threshold*100).toFixed(0)}%)`;
+    item.appendChild(swatch);
+    item.appendChild(lbl);
+    body.appendChild(item);
+  }
+}
+
+document.getElementById('legendToggle').addEventListener('click', () => {
+  legendCollapsed = !legendCollapsed;
+  document.getElementById('legend').classList.toggle('collapsed', legendCollapsed);
+  document.getElementById('legendToggle').textContent = legendCollapsed ? '+' : '\u2212';
+  if (legendCollapsed) document.getElementById('legendBody').style.display = 'none';
+  else document.getElementById('legendBody').style.display = '';
+});
+
+// ============================================================
+// TOOLBAR
+// ============================================================
+function buildToolbar() {
+  const tb = document.getElementById('toolbar');
+
+  const presetDiv = document.createElement('div');
+  presetDiv.className = 'camera-presets';
+  const presetNames = [
+    ['Iso', 'isometric'], ['Fwd', 'front'], ['Rear', 'rear'],
+    ['L', 'left'], ['R', 'right'], ['Top', 'top'], ['Bot', 'bottom']
+  ];
+  for (const [label, key] of presetNames) {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.title = `${key.charAt(0).toUpperCase() + key.slice(1)} view`;
+    btn.addEventListener('click', () => {
+      const p = state.cameraPresets[key];
+      if (p) flyCamera(p.pos, p.target);
+    });
+    presetDiv.appendChild(btn);
+  }
+  tb.appendChild(presetDiv);
+
+  const sep = () => { const s = document.createElement('span'); s.style.cssText = 'width:1px;height:20px;background:rgba(255,255,255,0.1)'; tb.appendChild(s); };
+  sep();
+
+  // Explode toggle
+  const explodeBtn = document.createElement('button');
+  explodeBtn.textContent = 'Explode';
+  explodeBtn.addEventListener('click', () => {
+    const panel = document.getElementById('sliderPanel');
+    const isExplode = panel.dataset.mode === 'explode';
+    if (isExplode) {
+      panel.classList.remove('visible');
+      panel.dataset.mode = '';
+    } else {
+      panel.innerHTML = `
+        <div class="slider-group">
+          <label>Explosion Amount</label>
+          <input type="range" id="explodeSlider" min="0" max="100" value="${state.exploded}">
+          <span class="value" id="explodeVal">${state.exploded}%</span>
+        </div>`;
+      panel.classList.add('visible');
+      panel.dataset.mode = 'explode';
+      document.getElementById('explodeSlider').addEventListener('input', (e) => {
+        const v = parseInt(e.target.value);
+        document.getElementById('explodeVal').textContent = v + '%';
+        setExploded(v);
+      });
+    }
+  });
+  tb.appendChild(explodeBtn);
+
+  sep();
+
+  // Clip toggle
+  const clipBtn = document.createElement('button');
+  clipBtn.textContent = 'Clip';
+  clipBtn.addEventListener('click', () => {
+    const panel = document.getElementById('sliderPanel');
+    const isClip = panel.dataset.mode === 'clip';
+    if (isClip) {
+      panel.classList.remove('visible');
+      panel.dataset.mode = '';
+    } else {
+      panel.innerHTML = `
+        <div class="slider-group">
+          <label>Clip X</label>
+          <input type="range" id="clipX" min="-8000" max="8000" value="${state.clipX}">
+          <span class="value" id="clipXVal">${state.clipX > -8000 ? state.clipX : 'off'}</span>
+        </div>
+        <div class="slider-group">
+          <label>Clip Y</label>
+          <input type="range" id="clipY" min="-8000" max="8000" value="${state.clipY}">
+          <span class="value" id="clipYVal">${state.clipY > -8000 ? state.clipY : 'off'}</span>
+        </div>
+        <div class="slider-group">
+          <label>Clip Z</label>
+          <input type="range" id="clipZ" min="-8000" max="8000" value="${state.clipZ}">
+          <span class="value" id="clipZVal">${state.clipZ > -8000 ? state.clipZ : 'off'}</span>
+        </div>`;
+      panel.classList.add('visible');
+      panel.dataset.mode = 'clip';
+      for (const axis of ['x', 'y', 'z']) {
+        const slider = document.getElementById(`clip${axis.toUpperCase()}`);
+        if (slider) {
+          slider.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value);
+            document.getElementById(`clip${axis.toUpperCase()}Val`).textContent = v > -8000 ? v : 'off';
+            updateClip(axis, v);
+          });
+        }
+      }
+    }
+  });
+  tb.appendChild(clipBtn);
+
+  sep();
+
+  // Transparency toggle
+  const transpBtn = document.createElement('button');
+  transpBtn.textContent = 'Casing';
+  transpBtn.addEventListener('click', () => {
+    const panel = document.getElementById('sliderPanel');
+    const isTransp = panel.dataset.mode === 'transp';
+    if (isTransp) {
+      panel.classList.remove('visible');
+      panel.dataset.mode = '';
+    } else {
+      panel.innerHTML = `
+        <div class="slider-group">
+          <label>Casing Opacity</label>
+          <input type="range" id="opacitySlider" min="0" max="100" value="${state.casingOpacity * 100}">
+          <span class="value" id="opacityVal">${(state.casingOpacity * 100).toFixed(0)}%</span>
+        </div>`;
+      panel.classList.add('visible');
+      panel.dataset.mode = 'transp';
+      document.getElementById('opacitySlider').addEventListener('input', (e) => {
+        const v = parseInt(e.target.value) / 100;
+        document.getElementById('opacityVal').textContent = (v * 100).toFixed(0) + '%';
+        setCasingOpacity(v);
+      });
+    }
+  });
+  tb.appendChild(transpBtn);
+
+  sep();
+
+  // Animation toggle
+  const animBtn = document.createElement('button');
+  animBtn.textContent = 'Rotate';
+  animBtn.dataset.action = 'rotate';
+  animBtn.classList.add('active');
+  animBtn.addEventListener('click', () => {
+    state.rotating = !state.rotating;
+    animBtn.classList.toggle('active');
+  });
+  tb.appendChild(animBtn);
+
+  sep();
+
+  // Sensor toggle
+  const sensorBtn = document.createElement('button');
+  sensorBtn.textContent = 'Sensors';
+  sensorBtn.classList.add('active');
+  sensorBtn.addEventListener('click', () => {
+    state.showSensors = !state.showSensors;
+    sensorBtn.classList.toggle('active');
+    const sg = scene.getObjectByName('sensors');
+    if (sg) sg.visible = state.showSensors;
+  });
+  tb.appendChild(sensorBtn);
+
+  // Heatmap toggle
+  const heatBtn = document.createElement('button');
+  heatBtn.textContent = 'Heatmap';
+  heatBtn.classList.add('active');
+  heatBtn.addEventListener('click', () => {
+    state.showHeatmap = !state.showHeatmap;
+    heatBtn.classList.toggle('active');
+    for (const [name, mesh] of Object.entries(state.stageMeshes)) {
+      if (!mesh || name === 'casing') continue;
+      const colors = mesh.geometry.attributes.color;
+      if (state.showHeatmap) {
+        const h = mesh.userData.health ?? 0.5;
+        const c = healthColor(h);
+        for (let i = 0; i < colors.array.length / 3; i++) {
+          colors.array[i*3] = c.r;
+          colors.array[i*3+1] = c.g;
+          colors.array[i*3+2] = c.b;
+        }
+      } else {
+        for (let i = 0; i < colors.array.length / 3; i++) {
+          colors.array[i*3] = 0.5;
+          colors.array[i*3+1] = 0.5;
+          colors.array[i*3+2] = 0.55;
+        }
+      }
+      colors.needsUpdate = true;
+    }
+  });
+  tb.appendChild(heatBtn);
+
+  sep();
+
+  // Replay toggle
+  const replayBtn = document.createElement('button');
+  replayBtn.textContent = 'Replay';
+  replayBtn.addEventListener('click', () => {
+    const bar = document.getElementById('replay-bar');
+    bar.classList.toggle('visible');
+    if (bar.classList.contains('visible') && state.replayData) {
+      initReplay();
+    }
+  });
+  tb.appendChild(replayBtn);
+
+  sep();
+
+  // Screenshot
+  const ssBtn = document.createElement('button');
+  ssBtn.textContent = '📷';
+  ssBtn.title = 'Take screenshot';
+  ssBtn.addEventListener('click', takeScreenshot);
+  tb.appendChild(ssBtn);
+
+  // Fullscreen
+  const fsBtn = document.createElement('button');
+  fsBtn.textContent = '⛶';
+  fsBtn.title = 'Toggle fullscreen';
+  fsBtn.addEventListener('click', toggleFullscreen);
+  tb.appendChild(fsBtn);
+
+  // Theme toggle
+  const themeBtn = document.createElement('button');
+  themeBtn.textContent = '☽';
+  themeBtn.title = 'Toggle theme';
+  themeBtn.addEventListener('click', toggleTheme);
+  tb.appendChild(themeBtn);
+
+  // Measurement
+  const measureBtn = document.createElement('button');
+  measureBtn.textContent = '📏';
+  measureBtn.title = 'Measurement tool';
+  measureBtn.addEventListener('click', toggleMeasureMode);
+  tb.appendChild(measureBtn);
+
+  sep();
+
+  // Reset camera
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'Reset';
+  resetBtn.addEventListener('click', () => {
+    controls.target.set(0, 0, 0);
+    camera.position.set(6000, -4000, 2500);
+    controls.update();
+  });
+  tb.appendChild(resetBtn);
+}
+
+// ============================================================
+// SCREENSHOT
+// ============================================================
+function takeScreenshot() {
+  renderer.render(scene, camera);
+  const link = document.createElement('a');
+  const now = new Date().toISOString().slice(0,19).replace(/[:]/g, '-');
+  link.download = `turbojet_3d_${now}.png`;
+  link.href = renderer.domElement.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// ============================================================
+// FULLSCREEN
+// ============================================================
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+// ============================================================
+// THEME TOGGLE
+// ============================================================
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  document.body.classList.toggle('light-theme', state.theme === 'light');
+  scene.background = new THREE.Color(state.theme === 'dark' ? 0x1a1a2e : 0xe8ecf1);
+}
+
+// ============================================================
+// MEASUREMENT TOOL
+// ============================================================
+const measureCanvas = document.createElement('canvas');
+measureCanvas.id = 'measureCanvas';
+measureCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;pointer-events:none';
+container.appendChild(measureCanvas);
+const mctx = measureCanvas.getContext('2d');
+
+function resizeMeasureCanvas() {
+  measureCanvas.width = container.clientWidth;
+  measureCanvas.height = container.clientHeight;
+}
+resizeMeasureCanvas();
+window.addEventListener('resize', resizeMeasureCanvas);
+
+function toggleMeasureMode() {
+  state.measureMode = !state.measureMode;
+  state.measurePoints = [];
+  document.getElementById('measureInfo').style.display = state.measureMode ? 'block' : 'none';
+  if (!state.measureMode) {
+    if (state.measureLine) {
+      scene.remove(state.measureLine);
+      state.measureLine = null;
+    }
+    for (const l of state.measureLabels || []) {
+      scene.remove(l);
+    }
+    state.measureLabels = [];
+    mctx.clearRect(0, 0, measureCanvas.width, measureCanvas.height);
+  }
+  document.getElementById('measureInfo').textContent = state.measureMode ? 'Click first point' : '';
+}
+
+renderer.domElement.addEventListener('click', (event) => {
+  if (!state.measureMode) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const mx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const my = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  const mv = new THREE.Vector2(mx, my);
+  raycaster.setFromCamera(mv, camera);
+  const allMeshes = Object.values(state.stageMeshes).filter(Boolean);
+  const hits = raycaster.intersectObjects(allMeshes, false);
+  if (!hits.length) return;
+  const point = hits[0].point.clone();
+
+  state.measurePoints.push(point);
+
+  if (state.measurePoints.length === 1) {
+    document.getElementById('measureInfo').textContent = 'Click second point';
+    // Draw marker
+    drawMeasureMarker(point);
+  } else if (state.measurePoints.length >= 2) {
+    const p1 = state.measurePoints[0];
+    const p2 = state.measurePoints[1];
+    const dist = p1.distanceTo(p2);
+
+    // Draw 3D line
+    const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x4a6cf7, linewidth: 2 });
+    const line = new THREE.Line(lineGeom, lineMat);
+    if (state.measureLine) scene.remove(state.measureLine);
+    state.measureLine = line;
+    scene.add(line);
+
+    // Distance label in 3D
+    const mid = p1.clone().add(p2).multiplyScalar(0.5);
+    const labelDiv = document.createElement('div');
+    labelDiv.textContent = `${(dist / 10).toFixed(0)} cm`;
+    labelDiv.style.cssText = 'color:#4a6cf7;font-size:12px;font-weight:600;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:4px';
+    const label = new CSS2DObject(labelDiv);
+    label.position.copy(mid);
+    for (const l of state.measureLabels || []) scene.remove(l);
+    state.measureLabels = [label];
+    scene.add(label);
+
+    document.getElementById('measureInfo').textContent = `Distance: ${(dist / 10).toFixed(0)} cm  (click to reset)`;
+
+    // Reset for next measurement
+    state.measurePoints = [];
+    setTimeout(() => {
+      if (state.measureMode) {
+        document.getElementById('measureInfo').textContent = 'Click first point';
+      }
+    }, 1500);
+  }
+});
+
+function drawMeasureMarker(point) {
+  mctx.clearRect(0, 0, measureCanvas.width, measureCanvas.height);
+  const vec = point.clone().project(camera);
+  const x = (vec.x * 0.5 + 0.5) * measureCanvas.width;
+  const y = (-vec.y * 0.5 + 0.5) * measureCanvas.height;
+  mctx.beginPath();
+  mctx.arc(x, y, 6, 0, Math.PI * 2);
+  mctx.fillStyle = '#4a6cf7';
+  mctx.fill();
+  mctx.strokeStyle = '#fff';
+  mctx.lineWidth = 2;
+  mctx.stroke();
+}
+
+// ============================================================
+// HUD UPDATE
+// ============================================================
+function updateHUD(replayFrame) {
+  if (!replayFrame) return;
+  const hud = document.getElementById('hud');
+  hud.classList.add('visible');
+  document.getElementById('hudRpm').textContent = replayFrame.rpm !== undefined ? Math.round(replayFrame.rpm).toLocaleString() : '--';
+  document.getElementById('hudThrust').textContent = replayFrame.thrust !== undefined ? Math.round(replayFrame.thrust).toLocaleString() + ' N' : '--';
+  document.getElementById('hudT4').textContent = replayFrame.T4 !== undefined ? replayFrame.T4.toFixed(0) + ' K' : '--';
+  document.getElementById('hudT5').textContent = replayFrame.T5 !== undefined ? replayFrame.T5.toFixed(0) + ' K' : '--';
+  document.getElementById('hudP3').textContent = replayFrame.P3 !== undefined ? replayFrame.P3.toFixed(1) + ' kPa' : '--';
+  document.getElementById('hudFuel').textContent = '--';
+  if (replayFrame.sensors) {
+    for (const [sid, val] of Object.entries(replayFrame.sensors)) {
+      if (sid === 'fuel_flow') {
+        document.getElementById('hudFuel').textContent = val + ' kg/s';
+      }
+    }
+  }
+}
+
+// ============================================================
+// REPLAY
+// ============================================================
+function initReplay() {
+  if (!state.replayData || !state.replayData.length) return;
+  state.replayDuration = state.replayData.length;
+  const seek = document.getElementById('replaySeek');
+  seek.max = state.replayDuration - 1;
+  seek.value = state.replayIdx;
+  updateReplayTime();
+  updateHUD(state.replayData[state.replayIdx]);
+}
+
+function applyReplayFrame(idx) {
+  if (!state.replayData || !state.replayData[idx]) return;
+  const frame = state.replayData[idx];
+  if (frame.health) updateHealth(frame.health);
+  if (frame.rpm !== undefined) rpm = frame.rpm;
+  if (frame.faults) setFaults(frame.faults);
+  if (frame.sensors) updateSensorValues(frame.sensors);
+  updateHUD(frame);
+  state.replayIdx = idx;
+}
+
+function updateReplayTime() {
+  document.getElementById('replayTime').textContent =
+    `Cycle ${state.replayIdx} / ${state.replayDuration - 1}`;
+}
+
+document.getElementById('replayPlayBtn').addEventListener('click', () => {
+  state.replayPlaying = !state.replayPlaying;
+  document.getElementById('replayPlayBtn').textContent = state.replayPlaying ? '\u23F8' : '\u25B6';
+});
+
+document.getElementById('replayRestartBtn').addEventListener('click', () => {
+  state.replayIdx = 0;
+  state.replayPlaying = false;
+  document.getElementById('replayPlayBtn').textContent = '\u25B6';
+  if (state.replayData && state.replayData[0]) applyReplayFrame(0);
+  document.getElementById('replaySeek').value = 0;
+  updateReplayTime();
+});
+
+document.getElementById('replaySeek').addEventListener('input', (e) => {
+  const idx = parseInt(e.target.value);
+  applyReplayFrame(idx);
+  updateReplayTime();
+});
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+let rpm = 12000;
+let faultPulse = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+
+  // Camera tween
+  if (cameraTween) cameraTween();
+
+  // Replay auto-advance
+  if (state.replayPlaying && state.replayData && state.replayData.length) {
+    state.replayIdx += 1;
+    if (state.replayIdx >= state.replayDuration) {
+      state.replayIdx = 0;
+    }
+    applyReplayFrame(state.replayIdx);
+    document.getElementById('replaySeek').value = state.replayIdx;
+    updateReplayTime();
+  }
+
+  // Component rotation
+  if (state.rotating && !state.clipActive) {
+    const speed = rpm / 60000 * Math.PI * 2;
+    const cg = state.stageGroups.compressor;
+    const tg = state.stageGroups.turbine;
+    const cm = cg ? cg.children[0] : null;
+    const tm = tg ? tg.children[0] : null;
+    if (cm) cm.rotation.x += speed * delta * 0.3;
+    if (tm) tm.rotation.x -= speed * delta * 0.5;
+  }
+
+  // Fault pulse
+  faultPulse += delta * 2;
+  const pulseVal = 0.5 + 0.5 * Math.sin(faultPulse);
+
+  for (const [stageName, faultInfo] of Object.entries(state.faults)) {
+    const mesh = state.stageMeshes[stageName];
+    if (!mesh) continue;
+    const severity = faultInfo.severity || 0;
+    const intensity = severity * pulseVal * 0.5;
+    mesh.material.emissive = new THREE.Color(1, 0.3, 0.1);
+    mesh.material.emissiveIntensity = intensity;
+  }
+
+  for (const [name, mesh] of Object.entries(state.stageMeshes)) {
+    if (!mesh || name === 'casing') continue;
+    if (!state.faults[name]) {
+      mesh.material.emissive = new THREE.Color(0, 0, 0);
+      mesh.material.emissiveIntensity = 0;
+    }
+  }
+
+  // Update measure marker position
+  if (state.measureMode && state.measurePoints.length === 1) {
+    // Only redraw if camera moved
+    drawMeasureMarker(state.measurePoints[0]);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+// ============================================================
+// WINDOW RESIZE
+// ============================================================
+window.addEventListener('resize', () => {
+  const w = container.clientWidth, h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  labelRenderer.setSize(w, h);
+  resizeMeasureCanvas();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+// Apply initial data to sensor markers and HUD
+if (ENGINE_DATA.sensors) {
+  updateSensorValues(ENGINE_DATA.sensors);
+}
+// Show HUD immediately if replay data exists
+if (ENGINE_DATA.replay && ENGINE_DATA.replay.length) {
+  updateHUD(ENGINE_DATA.replay[0]);
+}
+if (ENGINE_DATA.sensors && Object.values(ENGINE_DATA.sensors).some(s => s.value !== undefined)) {
+  document.getElementById('hud').classList.add('visible');
+}
+
+buildScene(ENGINE_DATA);
+animate();
+</script>
+</body>
+</html>

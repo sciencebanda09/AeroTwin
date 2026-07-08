@@ -1,0 +1,15 @@
+{
+  "model": "kj66",
+  "stages": [
+    "compressor",
+    "combustor",
+    "turbine",
+    "casing"
+  ],
+  "files": {
+    "compressor": "compressor.vtp",
+    "combustor": "combustor.vtp",
+    "turbine": "turbine.vtp",
+    "casing": "casing.vtp"
+  }
+}
