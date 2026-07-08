@@ -1,0 +1,45 @@
+# Generic turbojet engine CAD model configuration
+# Each .stp file in the zip corresponds to one part.
+
+zip_path: "turbojet-engine-21.snapshot.3.zip"
+
+# Per-file STEP loading (one file per part)
+# Names are matched by file stem (case-insensitive, underscore for space)
+
+stage_map:
+  compressor:
+    - nosecone
+    - airturbine1
+    - airturbine2
+    - airturbine3
+    - airturbine4
+    - airturbine5
+    - air_turbine_case
+  combustor:
+    - petrol_intake_bracket
+    - petrol_intake_case
+    - pipe_array
+    - air_turbine_bracket
+  turbine:
+    - petrolturbine1
+    - petrolturbine2
+    - petrolturbine3
+    - petrolturbine4
+    - petrolturbine5
+    - petrol_turbine_bracket
+    - petrol_turbine_case
+    - primary_turbine
+    - primary_turbine_case
+    - exhaust_case
+    - endcone
+
+casing_parts:
+  - bearingone
+  - bearing_case
+  - centralshaft
+  - primaryturbinebushing
+  - rearcaseengdrw
+  - rearmountingshaft
+
+skip_parts:
+  - jet_engine

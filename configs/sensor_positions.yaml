@@ -1,0 +1,94 @@
+# 3D sensor marker positions on the turbojet engine mesh.
+# Coordinates are approximate (mm) in the engine's local coordinate system.
+# The engine axis is X (front = negative X, exhaust = positive X).
+# Units: position in mm, valid_range in sensor-native units.
+# data_key maps to the column name in the inference output / input data.
+
+sensors:
+  rpm_compressor:
+    label: "Compressor RPM"
+    position: [-1200, 0, 800]
+    stage: compressor
+    unit: "RPM"
+    valid_range: [0, 120000]
+    data_key: "RPM"
+  rpm_turbine:
+    label: "Turbine RPM"
+    position: [1200, 0, 800]
+    stage: turbine
+    unit: "RPM"
+    valid_range: [0, 120000]
+    data_key: "RPM"
+
+  temperature_inlet:
+    label: "Inlet Temp (T2)"
+    position: [-2000, 600, 0]
+    stage: compressor
+    unit: "K"
+    valid_range: [200, 350]
+    data_key: "T2"
+  temperature_compressor:
+    label: "Compressor Discharge (T3)"
+    position: [-400, 600, 0]
+    stage: compressor
+    unit: "K"
+    valid_range: [300, 900]
+    data_key: "T3"
+  temperature_combustor:
+    label: "Combustor Exit (T4)"
+    position: [200, 600, 0]
+    stage: combustor
+    unit: "K"
+    valid_range: [800, 1700]
+    data_key: "T4"
+  temperature_exhaust:
+    label: "Exhaust Gas (T5)"
+    position: [1800, 600, 0]
+    stage: turbine
+    unit: "K"
+    valid_range: [600, 1300]
+    data_key: "T5"
+
+  pressure_compressor:
+    label: "Compressor Discharge (P3)"
+    position: [-400, -600, 0]
+    stage: compressor
+    unit: "kPa"
+    valid_range: [100, 2000]
+    data_key: "P3"
+  pressure_combustor:
+    label: "Combustor Pressure (P4)"
+    position: [200, -600, 0]
+    stage: combustor
+    unit: "kPa"
+    valid_range: [100, 1800]
+    data_key: "P4"
+
+  fuel_flow:
+    label: "Fuel Flow"
+    position: [-200, -400, 1000]
+    stage: combustor
+    unit: "kg/s"
+    valid_range: [0, 5]
+    data_key: "FuelFlow"
+
+  vibration_compressor:
+    label: "Compressor Vibration"
+    position: [-1000, 800, 600]
+    stage: compressor
+    unit: "g"
+    valid_range: [0, 50]
+  vibration_turbine:
+    label: "Turbine Vibration"
+    position: [1400, 800, 600]
+    stage: turbine
+    unit: "g"
+    valid_range: [0, 50]
+
+  health_monitor:
+    label: "Health Monitor"
+    position: [0, 1200, 0]
+    stage: combustor
+    unit: ""
+    valid_range: [0, 1]
+    data_key: "OverallHealth"

@@ -1,0 +1,34 @@
+# KJ-66 micro-turbojet engine CAD model configuration
+# Single STEP file containing a named assembly with 22 components.
+
+zip_path: "kj-66-micro-turbine-jet-engine-1.snapshot.1.zip"
+step_file: "KJ-66 Micro Turbine Jet Engine.stp"
+
+# Assembly-mode: names matched against XCAF product/instance names,
+# case-sensitive, substring/prefix match (handles ".1" suffixes).
+
+stage_map:
+  compressor:
+    - Compressor Wheel
+    - Shaft
+  combustor:
+    - Combustion Chamber Outer
+    - Combustion Chamber Inner
+  turbine:
+    - NGV
+
+casing_parts:
+  - Case
+  - NGV Case
+  - Front Flange
+  - Tail Cone
+  - Nozzle
+  - Diffuser
+  - Tunnel Shaft
+  - Front Cone
+  - Fuel Supply
+
+skip_parts:
+  - Bearing
+  - Bolt
+  - Acorn Nut

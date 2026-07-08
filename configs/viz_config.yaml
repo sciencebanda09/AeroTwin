@@ -1,0 +1,24 @@
+# 3D visualization configuration
+# Controls health coloring, fault detection, and viewer defaults.
+
+# Active CAD model for 3D engine visualization.
+# Set to "generic_turbine" (default) or "kj66".  Models live under
+# models/engine_meshes/<model_name>/ and are built via:
+#   python scripts/convert_engine_cad.py --model <name>
+active_engine_model: generic_turbine
+
+health_thresholds:
+  - threshold: 0.85
+    color: [0.2, 0.85, 0.2]
+    label: "Healthy"
+  - threshold: 0.60
+    color: [0.85, 0.80, 0.15]
+    label: "Warning"
+  - threshold: 0.35
+    color: [0.95, 0.50, 0.10]
+    label: "Critical"
+  - threshold: 0.00
+    color: [0.85, 0.15, 0.15]
+    label: "Failed"
+
+fault_severity_threshold: 0.30
