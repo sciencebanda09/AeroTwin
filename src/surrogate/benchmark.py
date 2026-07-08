@@ -40,7 +40,7 @@ def benchmark(
             models.append(model)
         except Exception:
             results.append(BenchmarkResult(kind, float("inf"), float("inf")))
-            models.append(None)
+            models.append(None)  # type: ignore[arg-type]
     valid = [(i, r) for i, r in enumerate(results) if r.rmse < float("inf")]
     order = sorted(valid, key=lambda pair: pair[1].rmse)
     best_idx = order[0][0] if order else 0

@@ -1,5 +1,6 @@
 """Quantile regression for direct prediction interval estimation."""
 
+from typing import Any
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -24,9 +25,9 @@ class QuantileSurrogate:
         self.seed = seed
         self.n_estimators = n_estimators
         self.base_estimator = base_estimator
-        self.models: dict[str, dict[str, object]] = {}
+        self.models: dict[str, dict[str, Any]] = {}
 
-    def _make_quantile_model(self, quantile: float) -> object:
+    def _make_quantile_model(self, quantile: float) -> HistGradientBoostingRegressor:
         """Create a quantile-aware HistGradientBoostingRegressor."""
         if self.base_estimator == "hist_gradient_boosting":
             return HistGradientBoostingRegressor(

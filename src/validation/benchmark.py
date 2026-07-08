@@ -52,6 +52,7 @@ def run_validation_suite(
 
         for kind in kinds:
             start = perf_counter()
+            model: Any
             if kind == "hybrid":
                 model = HybridPhysicsMLModel.train(train, ml_kind="hist_gradient_boosting")
             else:

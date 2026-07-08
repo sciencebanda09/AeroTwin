@@ -57,7 +57,7 @@ def run_benchmark_suite(
         start = perf_counter()
 
         if kind == "hybrid":
-            model = HybridPhysicsMLModel.train(train, ml_kind="hist_gradient_boosting")
+            model: Any = HybridPhysicsMLModel.train(train, ml_kind="hist_gradient_boosting")
         else:
             model = create_model(kind, n_estimators=400, scale_targets=True).fit(train)
 

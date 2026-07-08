@@ -1,5 +1,6 @@
 """Engine-health state estimator facade."""
 
+from typing import Any
 import numpy as np
 from .ekf import ExtendedKalmanFilter
 from .ukf import UnscentedKalmanFilter
@@ -12,6 +13,7 @@ class StateEstimator:
         if method not in ("ekf", "ukf"):
             raise ValueError(f"Unknown estimator method: {method}")
         self.method = method
+        self.filter: Any
         if method == "ekf":
             self.filter = ExtendedKalmanFilter(
                 np.ones(4), np.eye(4) * 0.02, np.eye(4) * 1e-5, np.eye(4) * 0.01

@@ -100,7 +100,7 @@ class HybridPhysicsMLModel:
         # "*Health" columns. The default SurrogateModel postprocessing clips
         # any "*Health" column to [0, 1], which would zero out every
         # negative residual and destroy the learned degradation signal.
-        ml_model.__init__(
+        ml_model.__init__(  # type: ignore[misc]
             pipeline,
             SENSOR_FEATURES,
             HYBRID_ML_TARGETS,

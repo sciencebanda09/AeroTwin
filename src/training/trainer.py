@@ -1,6 +1,7 @@
 """End-to-end training workflow."""
 
 from pathlib import Path
+from typing import Any
 import json
 from src.dataset.loader import TARGETS, load_dataset
 from src.dataset.split import grouped_split, official_split
@@ -35,7 +36,7 @@ def train_from_csv(
     frame = load_dataset(data_path)
     train, test = _STRATEGIES[strategy](frame, seed=seed)
     if kind == "hybrid":
-        model = HybridPhysicsMLModel.train(train, ml_kind="hist_gradient_boosting", seed=seed)
+        model: Any = HybridPhysicsMLModel.train(train, ml_kind="hist_gradient_boosting", seed=seed)
         prediction = model.predict(test)
     else:
         model = create_model(kind, seed=seed, n_estimators=n_estimators).fit(train)

@@ -61,7 +61,7 @@ def explain_prediction(
                 local = [
                     {"feature": str(n), "shap_value": float(v)} for n, v in zip(names, vals_list)
                 ]
-                local.sort(key=lambda x: -abs(x["shap_value"]))
+                local.sort(key=lambda x: -abs(float(x["shap_value"])))  # type: ignore[arg-type]
                 result["local_explanations"].append({"row": int(i), "factors": local[:10]})
             return result
         except Exception:
@@ -102,7 +102,7 @@ def explain_prediction(
                 else:
                     vals = imp_vec.copy()
                 local = [{"feature": str(n), "shap_value": float(v)} for n, v in zip(names, vals)]
-                local.sort(key=lambda x: -abs(x["shap_value"]))
+                local.sort(key=lambda x: -abs(float(x["shap_value"])))  # type: ignore[arg-type]
                 result["local_explanations"].append({"row": int(j), "factors": local[:10]})
         except Exception:
             pass

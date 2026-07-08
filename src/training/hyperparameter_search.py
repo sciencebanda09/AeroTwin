@@ -7,7 +7,7 @@ from src.dataset.loader import TARGETS
 from src.surrogate.train import create_model
 
 
-def select_model(train: pd.DataFrame, validation: pd.DataFrame) -> tuple[object, dict[str, float]]:
+def select_model(train: pd.DataFrame, validation: pd.DataFrame) -> tuple[object, dict[str, object]]:
     """Grid-search over model kinds and n_estimators, return best model and its config."""
     kinds = ["extra_trees", "random_forest", "hist_gradient_boosting", "mlp"]
     estimator_options = [200, 400]

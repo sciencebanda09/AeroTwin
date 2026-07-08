@@ -208,9 +208,10 @@ def explain_predictions(request: ExplainRequest) -> dict[str, Any]:
         obs_dicts = [obs.model_dump() for obs in request.observations]
         frame = pd.DataFrame(obs_dicts)
         raw_features = twin.model._prepare(frame)
+        pipeline = twin.model.pipeline
 
         def predict_fn(x: pd.DataFrame) -> np.ndarray:
-            return np.asarray(twin.model.pipeline.predict(x))
+            return np.asarray(pipeline.predict(x))
 
         explanation = explain_prediction(
             predict_fn,

@@ -45,12 +45,12 @@ class MaintenanceEngineConfig(BaseModel):
 
 class Settings(BaseModel):
     seed: int = 42
-    data: DataConfig = DataConfig()
-    model: ModelConfig = ModelConfig()
-    physics: PhysicsConfig = PhysicsConfig()
-    runtime: RuntimeConfig = RuntimeConfig()
-    scenario: ScenarioConfig = ScenarioConfig()
-    maintenance_engine: MaintenanceEngineConfig = MaintenanceEngineConfig()
+    data: DataConfig = DataConfig()  # type: ignore[call-arg]
+    model: ModelConfig = ModelConfig()  # type: ignore[call-arg]
+    physics: PhysicsConfig = PhysicsConfig()  # type: ignore[call-arg]
+    runtime: RuntimeConfig = RuntimeConfig()  # type: ignore[call-arg]
+    scenario: ScenarioConfig = ScenarioConfig()  # type: ignore[call-arg]
+    maintenance_engine: MaintenanceEngineConfig = MaintenanceEngineConfig()  # type: ignore[call-arg]
 
 
 def load_config(path: str | Path = "config.yaml") -> Settings:

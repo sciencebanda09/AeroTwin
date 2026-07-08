@@ -650,8 +650,13 @@ try:
                 background = model._prepare(raw_background)
                 sample = model._prepare(raw_sample)
 
+                pipeline = model.pipeline
+                if pipeline is None:
+                    st.error("Model has no pipeline — cannot explain predictions.")
+                    st.stop()
+
                 def predict_fn(x: pd.DataFrame) -> np.ndarray:
-                    return np.asarray(model.pipeline.predict(x))
+                    return np.asarray(pipeline.predict(x))
 
                 with st.spinner("Computing SHAP explanations..."):
                     explanation = explain_prediction(
@@ -789,14 +794,14 @@ try:
         for fault_name in selected_faults:
             fault_type = FaultType(fault_name)
             severity = st.slider(f"{fault_name} severity", 0.0, 1.0, 0.5, key=f"sev_{fault_name}")
-            target = None
+            fault_target: str | None = None
             if fault_type in {FaultType.SENSOR_DRIFT, FaultType.SENSOR_BIAS}:
-                target = st.selectbox(
+                fault_target = st.selectbox(
                     f"{fault_name} target",
                     ["T2", "T3", "T4", "P2", "P3", "P4"],
                     key=f"target_{fault_name}",
                 )
-            specs.append(FaultSpec(fault_type, severity, target))
+            specs.append(FaultSpec(fault_type, severity, fault_target))
         injector = FaultInjector(specs)
         twin_fault = DigitalTwin(str(latest_engine_id), estimator_method=estimator_method)
         if Path(model_path).exists():
@@ -822,7 +827,7 @@ try:
 
     elif page == "Root Cause Analysis":
         st.subheader("Root Cause Analysis")
-        comparison = st.session_state.get("scenario_comparison")
+        comparison = st.session_state.get("scenario_comparison")  # type: ignore[assignment]
         if comparison is None:
             st.info("Run the What-If Simulator first.")
         else:

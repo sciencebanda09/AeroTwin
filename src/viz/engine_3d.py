@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pyvista as pv
@@ -49,7 +50,8 @@ def load_engine_meshes(
             raise FileNotFoundError(
                 f"Mesh file not found: {path}. Run scripts/convert_engine_cad.py first."
             )
-        meshes[stage] = pv.read(str(path))
+        mesh = pv.read(str(path))
+        meshes[stage] = mesh if isinstance(mesh, pv.PolyData) else mesh.extract_surface()
     return meshes
 
 
@@ -67,14 +69,14 @@ def _compute_explode_offsets(meshes: dict[str, pv.PolyData]) -> dict[str, list[f
     for stage in STAGE_ORDER:
         mesh = meshes.get(stage)
         if mesh is None:
-            offsets[stage] = [0, 0, 0]
+            offsets[stage] = [0.0, 0.0, 0.0]
             continue
         bounds = _mesh_bounds(mesh)
         cx = (bounds[0] + bounds[1]) / 2
         # Scale factor: roughly 0.4 * half-span for a natural exploded look
-        half_span = (bounds[1] - bounds[0]) / 2 if stage != "casing" else 0
+        half_span = (bounds[1] - bounds[0]) / 2 if stage != "casing" else 0.0
         x_dir = 1.0 if cx >= 0 else -1.0
-        offsets[stage] = [x_dir * half_span * 0.8, 0, 0]
+        offsets[stage] = [x_dir * half_span * 0.8, 0.0, 0.0]
     return offsets
 
 
@@ -171,7 +173,7 @@ def render_static_image(
     meshes: dict[str, pv.PolyData] | None = None,
     height: int = 500,
     model_name: str | None = None,
-) -> np.ndarray:
+) -> Any:
     if meshes is None:
         meshes = load_engine_meshes(model_name=model_name)
 
