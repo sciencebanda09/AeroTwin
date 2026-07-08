@@ -1,3 +1,0 @@
-model:
-  kind: ensemble
-  members: [extra_trees, random_forest, gradient_boosting]

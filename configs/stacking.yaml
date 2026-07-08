@@ -1,4 +1,0 @@
-model:
-  kind: stacking
-  n_estimators: 300
-  scale_targets: true

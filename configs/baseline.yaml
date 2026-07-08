@@ -1,5 +1,0 @@
-model:
-  kind: extra_trees
-  n_estimators: 300
-  max_depth: null
-  scale_targets: true

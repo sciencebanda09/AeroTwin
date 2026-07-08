@@ -23,11 +23,10 @@ _HEALTH_TARGETS = ["CompressorHealth", "CombustorHealth", "TurbineHealth", "Over
 class DigitalTwin:
     """Fuses physics model, surrogate predictions, and Kalman state estimation."""
 
-    def __init__(self, engine_id: str = "engine-1", estimator_method: str = "ekf") -> None:
+    def __init__(self, engine_id: str = "engine-1") -> None:
         self.engine_id = engine_id
-        self.estimator_method = estimator_method
         self.physics = BraytonCycle()
-        self.estimator = StateEstimator(method=estimator_method)
+        self.estimator = StateEstimator()
         self.model: SurrogateModel | HybridPhysicsMLModel | None = None
         self.history: list[dict[str, Any]] = []
         self.fault_injector: FaultInjector = FaultInjector()
@@ -39,7 +38,7 @@ class DigitalTwin:
 
     def initialize(self) -> "DigitalTwin":
         """Reset temporal state while retaining a loaded model."""
-        self.estimator = StateEstimator(method=self.estimator_method)
+        self.estimator = StateEstimator()
         self.history.clear()
         return self
 

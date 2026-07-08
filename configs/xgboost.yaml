@@ -1,4 +1,0 @@
-model:
-  kind: xgboost
-  n_estimators: 300
-  max_depth: 6

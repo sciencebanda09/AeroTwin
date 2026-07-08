@@ -12,8 +12,8 @@ from src.digital_twin.engine import DigitalTwin
 from src.digital_twin.fleet import rank_fleet
 from src.explainability.root_cause import analyze_scenario
 from src.faults.injection import FaultInjector, FaultSpec, FaultType
-from src.maintenance.decision_engine import MaintenanceDecisionEngine
-from src.simulation.what_if import ScenarioAdjustment, ScenarioSimulator
+
+from src.simulation.what_if import ScenarioAdjustment, simulate_scenario
 from src.viz.engine_animation import engine_schematic
 from src.viz.engine_3d import load_engine_meshes, build_interactive_html, render_static_image
 from src.viz.engine_3d import _load_sensor_config, _load_viz_config, _health_key
@@ -84,7 +84,7 @@ view_mode = st.sidebar.radio(
 
 uploaded = st.sidebar.file_uploader("Sensor dataset (CSV)", type="csv")
 model_path = st.sidebar.text_input("Model artifact", "models/best_model.joblib")
-estimator_method = st.sidebar.selectbox("State Estimator", ["ekf", "ukf"], index=0)
+estimator_method = "ekf"
 
 if uploaded is None:
     st.info("Upload an official-schema CSV to begin inference.")
@@ -93,7 +93,7 @@ if uploaded is None:
 
 @st.cache_data(show_spinner="Processing sensor data and running inference...")
 def run_inference(
-    file_bytes: bytes, model_path: str, estimator_method: str
+    file_bytes: bytes, model_path: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     import io
 
@@ -102,7 +102,7 @@ def run_inference(
     outputs = []
     for engine_id, group in data.groupby("EngineID", sort=False):
         group = group.sort_values("Cycle").reset_index(drop=True)
-        twin = DigitalTwin(str(engine_id), estimator_method=estimator_method)
+        twin = DigitalTwin(str(engine_id))
         if Path(model_path).exists():
             twin.load_model(model_path)
         result = twin.batch_predict(group)
@@ -276,7 +276,7 @@ def render_3d_engine(
 
 try:
     file_bytes = uploaded.getvalue()
-    data, output = run_inference(file_bytes, model_path, estimator_method)
+    data, output = run_inference(file_bytes, model_path)
     show_debug = st.sidebar.checkbox("Show raw data", False)
     if show_debug:
         st.subheader("Raw Input")
@@ -485,7 +485,7 @@ try:
         col1, col2 = st.columns(2)
         param = col1.selectbox("Input parameter", ["FuelFlow", "RPM", "Altitude", "Mach"])
         n_points = col2.slider("Number of steps", 3, 15, 6)
-        twin_sweep = DigitalTwin(str(latest_engine_id), estimator_method=estimator_method)
+        twin_sweep = DigitalTwin(str(latest_engine_id))
         if Path(model_path).exists():
             twin_sweep.load_model(model_path)
         base_row = latest_input.to_dict()
@@ -537,7 +537,7 @@ try:
 
     elif page == "Calibration Analysis":
         st.subheader("Conformal Prediction Calibration")
-        cal_twin = DigitalTwin(str(latest_engine_id), estimator_method=estimator_method)
+        cal_twin = DigitalTwin(str(latest_engine_id))
         if Path(model_path).exists() and len(data) > 0:
             cal_twin.load_model(model_path)
         if cal_twin.model is not None:
@@ -627,7 +627,7 @@ try:
 
     elif page == "Model Explainability":
         st.subheader("Model Explainability (SHAP / Permutation Importance)")
-        twin_exp = DigitalTwin(estimator_method=estimator_method)
+        twin_exp = DigitalTwin()
         if Path(model_path).exists():
             twin_exp.load_model(model_path)
         model = twin_exp.model
@@ -765,23 +765,23 @@ try:
             sensor_noise_std=noise,
         )
         try:
-            comparison = ScenarioSimulator().run(baseline_row, adjustment)
+            comparison = simulate_scenario(baseline_row, adjustment)
             st.session_state["scenario_comparison"] = comparison
             st.session_state["scenario_inputs"] = (baseline_row, adjustment)
             before, after = st.columns(2)
-            for label, snapshot, col in (
-                ("Before", comparison.baseline, before),
-                ("After", comparison.adjusted, after),
+            for label, snap, col in (
+                ("Before", comparison["baseline"], before),
+                ("After", comparison["adjusted"], after),
             ):
                 with col:
                     st.markdown(f"**{label}**")
-                    st.metric("Health", f"{snapshot.overall_health:.1%}")
-                    st.metric("RUL", f"{snapshot.remaining_useful_life_cycles:.0f} cycles")
-                    st.metric("Failure prob.", f"{snapshot.failure_probability:.1%}")
-                    st.metric("Thrust", f"{snapshot.thrust_n:.0f} N")
-                    st.metric("TSFC", f"{snapshot.tsfc_kg_n_s:.5f} kg/N·s")
-                    st.metric("Confidence", f"{snapshot.confidence:.1%}")
-            st.json(comparison.delta)
+                    st.metric("Health", f"{snap['overall_health']:.1%}")
+                    st.metric("RUL", f"{snap['remaining_useful_life_cycles']:.0f} cycles")
+                    st.metric("Failure prob.", f"{snap['failure_probability']:.1%}")
+                    st.metric("Thrust", f"{snap['thrust_n']:.0f} N")
+                    st.metric("TSFC", f"{snap['tsfc_kg_n_s']:.5f} kg/N·s")
+                    st.metric("Confidence", f"{snap['confidence']:.1%}")
+            st.json(comparison["delta"])
         except ValueError as error:
             st.error(str(error))
 
@@ -803,7 +803,7 @@ try:
                 )
             specs.append(FaultSpec(fault_type, severity, fault_target))
         injector = FaultInjector(specs)
-        twin_fault = DigitalTwin(str(latest_engine_id), estimator_method=estimator_method)
+        twin_fault = DigitalTwin(str(latest_engine_id))
         if Path(model_path).exists():
             twin_fault.load_model(model_path)
         twin_fault.fault_injector = injector
@@ -849,7 +849,7 @@ try:
                 "turbine_efficiency": adjustment.turbine_efficiency or 1.0,
             }
             report = analyze_scenario(
-                baseline_inputs, adjusted_inputs, comparison.delta["overall_health"]
+                baseline_inputs, adjusted_inputs, comparison["delta"]["overall_health"]
             )
             st.info(report.summary)
             for factor in report.factors:
@@ -873,25 +873,23 @@ try:
         st.metric("Degradation Rate", f"{latest['DegradationRate']:.5f}/cycle")
 
     elif page == "Maintenance Options":
-        st.subheader("Ranked Maintenance Options")
-        options = MaintenanceDecisionEngine().generate_options(
+        st.subheader("Maintenance Recommendation")
+        from src.maintenance.recommendation import recommend
+        decision = recommend(
             float(latest["OverallHealth"]),
             float(latest["RULCycles"]),
             float(latest["FailureProbability"]),
         )
-        options_df = pd.DataFrame([vars(o) for o in options])
-        st.dataframe(
-            options_df.style.highlight_max(["utility_score"], color="#bbf7d0"), width="stretch"
-        )
-        st.success(f"Top recommendation: **{options[0].action}**")
-        st.caption(options[0].rationale)
+        st.success(f"**{decision.action}**")
+        st.caption(decision.rationale)
+        st.json(vars(decision))
 
     else:  # Settings
         st.subheader("Settings")
         st.markdown("**Model Configuration**")
         c1, c2 = st.columns(2)
         c1.metric("Model", Path(model_path).name if Path(model_path).exists() else "Not loaded")
-        c2.metric("State Estimator", estimator_method.upper())
+        c2.metric("State Estimator", "EKF")
 
         st.markdown("**3D Engine Model**")
         if "engine_model" not in st.session_state:

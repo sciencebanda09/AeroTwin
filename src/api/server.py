@@ -14,8 +14,8 @@ from src.digital_twin.engine import DigitalTwin
 from src.explainability.root_cause import analyze_scenario
 from src.explainability.shap_explainer import explain_prediction
 from src.faults.injection import FaultInjector, FaultSpec, FaultType
-from src.maintenance.decision_engine import MaintenanceDecisionEngine
-from src.simulation.what_if import ScenarioAdjustment, ScenarioSimulator
+from src.maintenance.recommendation import recommend
+from src.simulation.what_if import ScenarioAdjustment, simulate_scenario
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,6 @@ class Observation(BaseModel):
     T3: float = Field(gt=0)
     P4: float = Field(gt=0)
     T4: float = Field(gt=0)
-    EstimatorMethod: str = "ekf"
 
 
 class ScenarioRequest(BaseModel):
@@ -97,10 +96,9 @@ def service_health() -> dict[str, str]:
 def update_engine(engine_id: str, observation: Observation) -> dict[str, Any]:
     """Assimilate one sensor observation for an engine."""
     try:
-        estimator_method = observation.EstimatorMethod
         twin = twins.get(engine_id)
         if twin is None:
-            twin = DigitalTwin(engine_id, estimator_method=estimator_method)
+            twin = DigitalTwin(engine_id)
             twins[engine_id] = twin
         default = twins.get("engine-1")
         if twin.model is None and default is not None:
@@ -129,7 +127,7 @@ def simulate_scenario(request: ScenarioRequest) -> dict[str, Any]:
             turbine_efficiency=request.turbine_efficiency,
             sensor_noise_std=request.sensor_noise_std,
         )
-        comparison = ScenarioSimulator().run(request.baseline.model_dump(), adjustment)
+        comparison = simulate_scenario(request.baseline.model_dump(), adjustment)
         baseline_inputs = {
             "FuelFlow": request.baseline.FuelFlow,
             "RPM": request.baseline.RPM,
@@ -147,12 +145,12 @@ def simulate_scenario(request: ScenarioRequest) -> dict[str, Any]:
             "turbine_efficiency": adjustment.turbine_efficiency or 1.0,
         }
         report = analyze_scenario(
-            baseline_inputs, adjusted_inputs, comparison.delta["overall_health"]
+            baseline_inputs, adjusted_inputs, comparison["delta"]["overall_health"]
         )
         return {
-            "baseline": vars(comparison.baseline),
-            "adjusted": vars(comparison.adjusted),
-            "delta": comparison.delta,
+            "baseline": comparison["baseline"],
+            "adjusted": comparison["adjusted"],
+            "delta": comparison["delta"],
             "root_cause": {
                 "summary": report.summary,
                 "factors": [vars(f) for f in report.factors],
@@ -184,16 +182,14 @@ def get_faults(engine_id: str) -> dict[str, Any]:
     return {"engine_id": engine_id, "active_faults": twin.fault_injector.to_summary()}
 
 
-@app.post("/v1/engines/{engine_id}/maintenance/options")
-def maintenance_options(
+@app.post("/v1/engines/{engine_id}/maintenance/recommend")
+def maintenance_recommend(
     engine_id: str, health: float, rul_cycles: float, failure_probability: float
 ) -> dict[str, Any]:
-    """Return ranked maintenance options for the given risk indicators."""
+    """Return a maintenance recommendation for the given risk indicators."""
     try:
-        options = MaintenanceDecisionEngine().generate_options(
-            health, rul_cycles, failure_probability
-        )
-        return {"engine_id": engine_id, "options": [vars(option) for option in options]}
+        decision = recommend(health, rul_cycles, failure_probability)
+        return {"engine_id": engine_id, "decision": vars(decision)}
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
