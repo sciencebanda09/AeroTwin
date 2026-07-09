@@ -1,4 +1,8 @@
-# Architecture
+# Chapter 4: Architecture
+
+[← Chapter 3: Equations](Equations.md) · [Chapter 5: Dataset →](DATA.md)
+
+---
 
 ## Data Flow
 
@@ -103,3 +107,7 @@ pipeline.py         ->  all modules
 | `benchmark` | `pipeline.py` | Latency/throughput benchmarks |
 | `orchestrate` | `pipeline.py` | Train all, validate, benchmark |
 | `demo` | `pipeline.py` | Demo with real data slice |
+
+---
+
+[← Chapter 3: Equations](Equations.md) · [Chapter 5: Dataset →](DATA.md)

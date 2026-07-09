@@ -1,4 +1,8 @@
-# Equations
+# Chapter 3: Equations
+
+[← Chapter 2: Theory](Theory.md) · [Chapter 4: Architecture →](ARCHITECTURE.md)
+
+---
 
 ## 1 ISA Atmosphere
 
@@ -264,3 +268,7 @@ features: [max(θ_cal - health_t, 0), max(H - (N - t), 0) / H]
 | FuelFlowRPM | FuelFlow · RPM / 10⁵ | interaction |
 | CorrectedFuelFlow | FuelFlow / √(Tamb / 288.15) | normalised |
 | ResP2–ResT4 | (S − S_healthy) / S_healthy | residual (6) |
+
+---
+
+[← Chapter 2: Theory](Theory.md) · [Chapter 4: Architecture →](ARCHITECTURE.md)

@@ -1,6 +1,20 @@
-# Turbojet Digital Twin
+# Chapter 1: Turbojet Digital Twin — Overview
 
 Physics-informed digital twin for four-stage turbojet health monitoring, RUL prediction, condition-based maintenance, and **interactive 3D engine visualization**.
+
+**Documentation Series**
+
+| # | Chapter | Description |
+|---|---------|-------------|
+| 1 | **README** (this page) | Project overview, quick start, CLI & API reference |
+| 2 | [Theory](docs/Theory.md) | Thermodynamics, state estimation, surrogate modelling, prognostics |
+| 3 | [Equations](docs/Equations.md) | Full mathematical formulation with all equations |
+| 4 | [Architecture](docs/ARCHITECTURE.md) | Module dependencies, data flow, design decisions |
+| 5 | [Dataset](docs/DATA.md) | Schema, feature engineering, split strategies |
+| 6 | [Validation](docs/Validation.md) | Model comparison tables, per-target metrics, benchmarks |
+| — | [Research](../research/) | Bibliography, ablation studies, figures, experiments |
+
+---
 
 ## Architecture
 
@@ -272,6 +286,17 @@ pytest --cov=src         # With coverage
 ruff check src/          # Lint
 black --check src/       # Format check
 ```
+
+## Documentation Series
+
+Continue reading:
+
+- **[Chapter 2: Theory](docs/Theory.md)** → Turbojet thermodynamics, EKF, surrogate modelling, RUL, failure probability
+- **[Chapter 3: Equations](docs/Equations.md)** → Full mathematical formulation
+- **[Chapter 4: Architecture](docs/ARCHITECTURE.md)** → Module dependencies and data flow
+- **[Chapter 5: Dataset](docs/DATA.md)** → Schema, features, splits
+- **[Chapter 6: Validation](docs/Validation.md)** → Model comparison and benchmarks
+- **[Research](../research/)** → Bibliography, ablation studies
 
 ## License
 

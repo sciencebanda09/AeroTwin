@@ -1,4 +1,8 @@
-# Theory
+# Chapter 2: Theory
+
+[← Chapter 1: Overview](../README.md) · [Chapter 3: Equations →](Equations.md)
+
+---
 
 ## 1 Turbojet Thermodynamics
 
@@ -149,3 +153,7 @@ Two explanation methods rank the factors behind a health change:
 
 - **Physics-sensitivity** — for what-if scenarios: signed contribution = `weight · relative_change(input)` for FuelFlow, RPM, Tamb, Pamb, compressor/turbine efficiency
 - **SHAP** — for ML model predictions: TreeExplainer (when `shap` is available) with permutation-importance fallback
+
+---
+
+[← Chapter 1: Overview](../README.md) · [Chapter 3: Equations →](Equations.md)

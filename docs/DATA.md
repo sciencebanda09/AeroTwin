@@ -1,4 +1,8 @@
-# Dataset Contract
+# Chapter 5: Dataset Contract
+
+[← Chapter 4: Architecture](ARCHITECTURE.md) · [Chapter 6: Validation →](Validation.md)
+
+---
 
 ## Schema
 
@@ -51,3 +55,7 @@ producing 34 total features used by the surrogate pipeline.
 |----------|-------------|
 | `official_split` | Holds out a fraction of each engine's own cycles |
 | `grouped_split` | Holds out entire engines (harder generalization test) |
+
+---
+
+[← Chapter 4: Architecture](ARCHITECTURE.md) · [Chapter 6: Validation →](Validation.md)

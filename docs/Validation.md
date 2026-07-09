@@ -1,4 +1,8 @@
-# Validation & Benchmarks
+# Chapter 6: Validation & Benchmarks
+
+[← Chapter 5: Dataset](DATA.md) · [Research →](../research/)
+
+---
 
 ## Model Comparison
 
@@ -117,3 +121,7 @@ Per-sample latency is near-constant up to batch size 100. The pipeline overhead 
 3. **Metrics**: RMSE, MAE, R², MAPE computed per-target and aggregated across all 6 targets
 4. **Conformal coverage**: calibrated to 90% marginal coverage on held-out set
 5. **Reproducibility**: all splits use fixed seed 42; metrics are deterministic for a given model + data
+
+---
+
+[← Chapter 5: Dataset](DATA.md) · [Research →](../research/)
