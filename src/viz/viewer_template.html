@@ -377,42 +377,65 @@ function buildSensorGroupPanel(sensors) {
 }
 
 // ============================================================
-// AIRFLOW STREAMLINES  — particles through the engine
+// AIRFLOW STREAMLINES  — volumetric tube through the engine
 // ============================================================
 let streamParticles = null;
 let streamParticlePositions = null;
-const STREAM_COUNT = 600;
+let streamSizes = null;
+const STREAM_COUNT = 1200;
 const STREAM_PATH = [
-  [-3000, 0, 0],  // inlet
+  [-3000, 0, 0],
   [-1500, 200, 200],
-  [0, 0, 0],       // compressor face
+  [0, 0, 0],
   [1000, -150, -100],
-  [2000, 0, 0],    // combustor
+  [2000, 0, 0],
   [3000, 100, 50],
-  [4000, 0, 0],    // turbine
+  [4000, 0, 0],
   [5000, -50, -20],
-  [6500, 0, 0],    // exhaust
+  [6500, 0, 0],
 ];
+const STREAM_TUBE_RADIUS = 500;  // scatter radius around centerline
+const STREAM_NORMALIZE = 0.02;   // step for tangent computation
+
+function _streamOffset(pt, tangent, radius, angle) {
+  // Compute a perpendicular vector to the tangent
+  const up = new THREE.Vector3(0, 1, 0);
+  const binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+  if (binormal.length() < 0.01) {
+    // tangent is parallel to up; use a different up
+    const altUp = new THREE.Vector3(1, 0, 0);
+    binormal.crossVectors(tangent, altUp).normalize();
+  }
+  const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+  return new THREE.Vector3()
+    .copy(pt)
+    .add(normal.clone().multiplyScalar(radius * Math.cos(angle)))
+    .add(binormal.clone().multiplyScalar(radius * Math.sin(angle)));
+}
 
 function buildStreamlines() {
-  // Catmull-Rom spline through the engine
-  const pts = STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2]));
-  const curve = new THREE.CatmullRomCurve3(pts);
+  const curve = new THREE.CatmullRomCurve3(STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2])));
 
   const positions = new Float32Array(STREAM_COUNT * 3);
   const colors = new Float32Array(STREAM_COUNT * 3);
+  const sizes = new Float32Array(STREAM_COUNT);
 
   for (let i = 0; i < STREAM_COUNT; i++) {
     streamOffsets[i] = Math.random();
-    streamSpeeds[i] = 0.002 + Math.random() * 0.004;
+    streamSpeeds[i] = 0.001 + Math.random() * 0.006;
+    // Each particle has a fixed radial offset forming a volumetric tube
+    streamRadii[i] = Math.sqrt(Math.random()) * STREAM_TUBE_RADIUS;
+    streamAngles[i] = Math.random() * Math.PI * 2;
     const t = streamOffsets[i];
     const pt = curve.getPoint(t);
-    positions[i*3] = pt.x;
-    positions[i*3+1] = pt.y;
-    positions[i*3+2] = pt.z;
-    // Color gradient along path: blue(t=0) -> cyan -> green -> orange -> red(t=1)
-    const hue = 0.58 - t * 0.50;  // 0.58 (blue) -> 0.08 (orange-red)
-    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.45 + t * 0.15);
+    const tangent = curve.getTangent(t);
+    const off = _streamOffset(pt, tangent, streamRadii[i], streamAngles[i]);
+    positions[i*3] = off.x;
+    positions[i*3+1] = off.y;
+    positions[i*3+2] = off.z;
+    sizes[i] = 30 + Math.random() * 50;
+    const hue = 0.58 - t * 0.50;
+    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.5 + t * 0.15);
     colors[i*3] = c.r;
     colors[i*3+1] = c.g;
     colors[i*3+2] = c.b;
@@ -421,40 +444,43 @@ function buildStreamlines() {
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
   const mat = new THREE.PointsMaterial({
-    size: 80,
+    size: 60,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.65,
     vertexColors: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
+    sizeAttenuation: true,
   });
 
   streamParticles = new THREE.Points(geom, mat);
   streamParticlePositions = geom.attributes.position;
+  streamSizes = geom.attributes.size;
   scene.add(streamParticles);
 }
 
 function updateStreamlines(delta, rpmVal) {
   if (!streamParticles || !streamParticlePositions) return;
-  const pts = STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2]));
-  const curve = new THREE.CatmullRomCurve3(pts);
-  const speedScale = Math.max(0.2, rpmVal / 80000);
+  const curve = new THREE.CatmullRomCurve3(STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+  const speedScale = Math.max(0.15, rpmVal / 60000);
   const pos = streamParticlePositions.array;
-
   const col = streamParticles.geometry.attributes.color;
+
   for (let i = 0; i < STREAM_COUNT; i++) {
     streamOffsets[i] = (streamOffsets[i] + streamSpeeds[i] * delta * speedScale) % 1.0;
     const t = streamOffsets[i];
     const pt = curve.getPoint(t);
-    pos[i*3] = pt.x;
-    pos[i*3+1] = pt.y;
-    pos[i*3+2] = pt.z;
-    // Update color as particle moves
+    const tangent = curve.getTangent(t);
+    const off = _streamOffset(pt, tangent, streamRadii[i], streamAngles[i]);
+    pos[i*3] = off.x;
+    pos[i*3+1] = off.y;
+    pos[i*3+2] = off.z;
     const hue = 0.58 - t * 0.50;
-    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.45 + t * 0.15);
+    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.5 + t * 0.15);
     col.array[i*3] = c.r;
     col.array[i*3+1] = c.g;
     col.array[i*3+2] = c.b;
@@ -1526,6 +1552,8 @@ let rpm = 12000;
 let faultPulse = 0;
 const streamOffsets = new Float32Array(STREAM_COUNT);
 const streamSpeeds = new Float32Array(STREAM_COUNT);
+const streamRadii = new Float32Array(STREAM_COUNT);
+const streamAngles = new Float32Array(STREAM_COUNT);
 
 function animate() {
   requestAnimationFrame(animate);
