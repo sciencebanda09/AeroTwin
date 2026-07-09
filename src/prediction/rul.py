@@ -46,7 +46,7 @@ def estimate_rul(
         raise ValueError("at least two aligned observations are required")
     window = min(len(x), 50)
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=np.RankWarning)
+        warnings.filterwarnings("ignore", category=np.exceptions.RankWarning)
         coeffs = np.polyfit(x[-window:], y[-window:], 1)
     slope = coeffs[0]
     rate = max(-float(slope), 1e-6)

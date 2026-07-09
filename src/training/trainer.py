@@ -45,11 +45,8 @@ def train_from_csv(
         model = create_model(kind, seed=seed, n_estimators=n_estimators).fit(train)
         prediction = model.predict(heldout)
     metrics = regression_metrics(heldout[TARGETS].to_numpy(), prediction.to_numpy())
-    if kind == "hybrid":
-        model.save(output_path)
-    else:
-        model.calibrate(calibration)
-        model.save(output_path)
+    model.calibrate(calibration)
+    model.save(output_path)
     metrics_path = Path(output_path).with_suffix(".metrics.json")
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     return metrics

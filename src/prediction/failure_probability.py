@@ -84,6 +84,6 @@ def failure_probability(
     hc = calibrator.health_coef if calibrator is not None else _FALLBACK_HEALTH_COEF
     hzc = calibrator.horizon_coef if calibrator is not None else _FALLBACK_HORIZON_COEF
     health_term = max(threshold - health, 0.0) * hc
-    horizon_term = (horizon_cycles - remaining_cycles) / max(horizon_cycles, 1) * hzc
+    horizon_term = max(horizon_cycles - remaining_cycles, 0.0) / max(horizon_cycles, 1) * hzc
     score = max(min(health_term + horizon_term, 40), -40)
     return 1 / (1 + math.exp(-score))

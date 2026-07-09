@@ -124,6 +124,24 @@ class HybridPhysicsMLModel:
         combined["TSFC"] = _derive_tsfc(frame, combined)
         return _clip_physical(combined)
 
+    def calibrate(self, frame: pd.DataFrame, coverage: float = 0.9) -> "HybridPhysicsMLModel":
+        """Calibrate the inner ML residual model on the combined hybrid output.
+
+        Builds a residual frame (actual - physics) from *frame* and delegates
+        to the inner SurrogateModel's calibrator so that confidence intervals
+        reflect the uncertainty of the full hybrid (physics + ML) prediction.
+        """
+        physics_preds = _batch_physics_predict(self.physics, frame)
+        residual_frame = frame.copy()
+        for target in HYBRID_ML_TARGETS:
+            if target == "OverallHealth":
+                continue
+            actual = frame[target].values.astype(float)
+            physics_val = physics_preds[target].values.astype(float)
+            residual_frame[target] = actual - physics_val
+        self.ml_model.calibrate(residual_frame, coverage)
+        return self
+
     def predict_with_uncertainty(
         self, frame: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
