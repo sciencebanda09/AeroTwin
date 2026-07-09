@@ -404,6 +404,54 @@ try:
         )
         st.dataframe(latest_engine_output[["Cycle"] + columns].tail(10), width="stretch")
 
+        if page == "RUL & Risk":
+            from src.maintenance.recommendation import recommend
+
+            st.subheader("Maintenance Timeline")
+
+            rate = float(latest["DegradationRate"])
+            health_now = float(latest["OverallHealth"])
+            rul = float(latest["RULCycles"])
+            prob = float(latest["FailureProbability"])
+            current_cycle = int(latest["Cycle"])
+            weakest = min(
+                ["CompressorHealth", "CombustorHealth", "TurbineHealth"],
+                key=lambda k: float(latest[k]),
+            )
+
+            # Project future cycles for key health thresholds
+            thresholds = [0.75, 0.55, 0.30]
+            labels = ["Moderate risk (increase monitoring)", "High risk (schedule inspection)", "Critical (remove from service)"]
+            milestones = []
+            for th, lbl in zip(thresholds, labels):
+                if health_now > th and rate > 1e-6:
+                    cycles_to = int((health_now - th) / rate) if rate > 0 else 9999
+                    due = current_cycle + cycles_to
+                    milestones.append((cycles_to, due, lbl, th))
+
+            left_t, right_t = st.columns([2, 1])
+            with left_t:
+                timeline_html = '<div style="position:relative;padding-left:30px;border-left:3px solid #6366f1;margin:10px 0">'
+                # Current state
+                decision = recommend(health_now, rul, prob, weakest)
+                timeline_html += f'<div style="margin:0 0 12px 0;position:relative"><span style="position:absolute;left:-38px;top:4px;width:14px;height:14px;border-radius:50%;background:#6366f1;border:2px solid #fff"></span><strong style="color:#e0e0e0">Now</strong><br><span style="color:#94a3b8;font-size:0.9em">Cycle {current_cycle} — {decision.action}</span></div>'
+                for cycles_to, due, lbl, th in milestones:
+                    color = {0.75: "#f59e0b", 0.55: "#f97316", 0.30: "#ef4444"}[th]
+                    timeline_html += f'<div style="margin:0 0 12px 0;position:relative"><span style="position:absolute;left:-38px;top:4px;width:14px;height:14px;border-radius:50%;background:{color};border:2px solid #fff"></span><strong style="color:#e0e0e0">In {cycles_to} cycles</strong><br><span style="color:#94a3b8;font-size:0.9em">~Cycle {due} — {lbl}</span></div>'
+                # RUL end
+                if rul > 0:
+                    timeline_html += f'<div style="margin:0;position:relative"><span style="position:absolute;left:-38px;top:4px;width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff"></span><strong style="color:#e0e0e0">In {int(rul)} cycles</strong><br><span style="color:#94a3b8;font-size:0.9em">~Cycle {current_cycle + int(rul)} — End of useful life</span></div>'
+                timeline_html += "</div>"
+                st.markdown(timeline_html, unsafe_allow_html=True)
+
+            with right_t:
+                st.metric("Weakest subsystem", weakest.replace("Health", ""))
+                decision = recommend(health_now, rul, prob, weakest)
+                st.metric("Recommended action", decision.action)
+                st.metric("Urgency", decision.urgency.upper())
+                st.metric("Safe operating cycles", decision.safe_cycles)
+                st.caption(decision.rationale)
+
     elif page == "Flight Playback":
         st.subheader("Flight Playback")
         st.markdown(
