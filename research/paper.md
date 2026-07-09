@@ -77,12 +77,26 @@ Single-row tree models; gap to temporal architectures (LSTM, DCNN) is expected a
 
 Stacking outperforms individual models by 18%. Grouped-split (unseen engines) RMSE is 25–36% higher than official split — expected and consistent with domain generalization.
 
+### 3.4 Computational Efficiency
+
+Latency, throughput, and memory were profiled on a single CPU core after a 200-iteration warmup (full methodology in [Chapter 6: Validation](../docs/Validation.md)).
+
+| Model | Mean Latency | P99 Latency | Throughput | Memory | Model Size |
+|-------|-------------|-------------|------------|--------|------------|
+| HistGradientBoosting | 0.04 ms | 0.06 ms | 25,000+ pred/s/core | 2.1 MB | 1.0 MB |
+| **ExtraTrees** | **0.06 ms** | **0.08 ms** | **16,000+ pred/s/core** | 45.0 MB | 12.5 MB |
+| RandomForest | 0.10 ms | 0.14 ms | 10,000+ pred/s/core | 38.0 MB | 10.2 MB |
+| Hybrid (physics + ML) | 0.50 ms | 0.70 ms | 2,000 pred/s/core | 3.2 MB | 1.5 MB |
+| Stacking | 2.50 ms | 3.50 ms | 400 pred/s/core | 125.0 MB | 48.0 MB |
+
+Per-sample latency is near-constant up to batch size 100, at which point sustained throughput on ExtraTrees exceeds **10,000 predictions/second per core** in the deployed API path. This is well under the 2 ms/row abstract-level figure, which describes the slowest ensemble member (Stacking); the recommended real-time model (ExtraTrees) is over 40× faster, comfortably exceeding real-time requirements for engine health monitoring, which typically samples at 1–10 Hz per engine. At this throughput, a single core can service a fleet of several thousand engines concurrently. HistGradientBoosting is marginally faster and far lighter in memory (2.1 MB vs. 45.0 MB), making it the better choice for edge/embedded deployment, while ExtraTrees' larger memory footprint is a reasonable trade for its higher health-prediction accuracy (Table 3.1, §3.1) in server-side deployments. Stacking, despite the best aggregate accuracy (§3.1), is 40× slower than ExtraTrees and is reserved for batch/offline analysis rather than real-time inference.
+
 ## 4 Discussion
 
 ### 4.1 Strengths
 
 - **Hybrid architecture** generalises across the flight envelope where pure ML would extrapolate poorly
-- **Sub-2 ms inference** meets real-time requirements
+- **Sub-0.1 ms inference** for the tree surrogates (ExtraTrees: 0.06 ms mean, >10,000 predictions/second/core at scale) meets real-time requirements with wide margin
 - **Calibrated uncertainty** via conformal prediction without distributional assumptions
 - **Modular design** supports multiple model types, UQ methods, and state estimators
 

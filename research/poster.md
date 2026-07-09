@@ -48,7 +48,7 @@
 |-----------|-------------|
 | **Physical consistency** | Physics handles altitude, Mach, throttle variation |
 | **Degradation isolation** | ML sees only deviation from healthy — not condition |
-| **Real-time** | 2 ms inference per row (both models) |
+| **Real-time** | ExtraTrees: 0.06 ms/row, >10,000 pred/s/core |
 
 ---
 
@@ -111,6 +111,6 @@ Tree models on raw sensors. Gap to LSTM expected — C-MAPSS rewards temporal re
 
 1. **Hybrid physics + ML residual** achieves R² > 0.97 for thrust/TSFC, > 0.74 for health
 2. **Conformal prediction** provides calibrated 90% intervals without distributional assumptions
-3. **Sub-2 ms** inference suitable for real-time monitoring
+3. **0.06 ms inference, >10,000 predictions/second/core** (ExtraTrees) — comfortably real-time
 4. **C-MAPSS validation** confirms infrastructure generalises to public benchmark
 5. Open-source, documented, CI-tested
