@@ -1,5 +1,6 @@
 """Degradation-trend remaining useful life estimation."""
 
+import warnings
 from dataclasses import dataclass
 import numpy as np
 
@@ -44,7 +45,9 @@ def estimate_rul(
     if len(x) != len(y) or len(x) < 2:
         raise ValueError("at least two aligned observations are required")
     window = min(len(x), 50)
-    coeffs = np.polyfit(x[-window:], y[-window:], 1)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=np.RankWarning)
+        coeffs = np.polyfit(x[-window:], y[-window:], 1)
     slope = coeffs[0]
     rate = max(-float(slope), 1e-6)
     remaining = max((float(y[-1]) - threshold) / rate, 0.0)
