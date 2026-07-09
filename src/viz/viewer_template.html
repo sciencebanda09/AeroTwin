@@ -381,7 +381,7 @@ function buildSensorGroupPanel(sensors) {
 // ============================================================
 let streamParticles = null;
 let streamParticlePositions = null;
-const STREAM_COUNT = 400;
+const STREAM_COUNT = 600;
 const STREAM_PATH = [
   [-3000, 0, 0],  // inlet
   [-1500, 200, 200],
@@ -423,12 +423,13 @@ function buildStreamlines() {
   geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
   const mat = new THREE.PointsMaterial({
-    size: 30,
+    size: 80,
     transparent: true,
-    opacity: 0.40,
+    opacity: 0.55,
     vertexColors: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    depthTest: false,
   });
 
   streamParticles = new THREE.Points(geom, mat);
