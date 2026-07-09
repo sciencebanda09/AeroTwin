@@ -377,34 +377,67 @@ function buildSensorGroupPanel(sensors) {
 }
 
 // ============================================================
-// AIRFLOW STREAMLINES  — volumetric tube through the engine
+// AIRFLOW STREAMLINES  — engineering visualization with animated dashes
 // ============================================================
-let streamParticles = null;
-let streamParticlePositions = null;
-let streamSizes = null;
-const STREAM_COUNT = 1200;
+const STAGE_DEFS = [
+  { t: 0.00, name: 'inlet',        spd: 0.4, swl: 0.0, rad: 1.0 },
+  { t: 0.18, name: 'precomp',      spd: 0.6, swl: 1.5, rad: 0.8 },
+  { t: 0.32, name: 'compressor',   spd: 1.0, swl: 4.0, rad: 0.35 },
+  { t: 0.48, name: 'combustor',    spd: 1.8, swl: 1.5, rad: 0.55 },
+  { t: 0.62, name: 'turbine',      spd: 1.4, swl: 0.8, rad: 0.45 },
+  { t: 0.78, name: 'exhaust',      spd: 2.2, swl: 0.2, rad: 0.85 },
+];
+
+function _stageLerp(t, prop) {
+  for (let i = 0; i < STAGE_DEFS.length - 1; i++) {
+    const a = STAGE_DEFS[i], b = STAGE_DEFS[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const f = (t - a.t) / (b.t - a.t);
+      return a[prop] + f * (b[prop] - a[prop]);
+    }
+  }
+  return STAGE_DEFS[STAGE_DEFS.length - 1][prop];
+}
+
+function _streamColor(t) {
+  return new THREE.Color().setHSL(Math.max(0.02, 0.58 - t * 0.55), 0.88, 0.35 + t * 0.30);
+}
+
+const MAX_STREAMS = 36;
+const SEGS = 96;
+const STREAM_MAX_RADIUS = 450;
 const STREAM_PATH = [
   [-3000, 0, 0],
-  [-1500, 200, 200],
-  [0, 0, 0],
-  [1000, -150, -100],
-  [2000, 0, 0],
-  [3000, 100, 50],
-  [4000, 0, 0],
-  [5000, -50, -20],
-  [6500, 0, 0],
+  [-2000, 100, 150],
+  [-1000, 200, 200],
+  [-500,  100, 100],
+  [0,     0,   0],
+  [500,  -80, -80],
+  [1000, -150,-150],
+  [1500, -50, -50],
+  [2000,  0,   0],
+  [2500,  50,  50],
+  [3000, 100, 100],
+  [3500,  50,  50],
+  [4000,  0,   0],
+  [4500, -60, -60],
+  [5000,  0,   0],
+  [5750,  0,   0],
+  [6500,  0,   0],
 ];
-const STREAM_TUBE_RADIUS = 500;  // scatter radius around centerline
-const STREAM_NORMALIZE = 0.02;   // step for tangent computation
 
-function _streamOffset(pt, tangent, radius, angle) {
-  // Compute a perpendicular vector to the tangent
+let streamGroups = [];
+let dashTime = 0;
+let visibleStreams = MAX_STREAMS;
+let dashParticles = null;
+let dashParticlePos = null;
+let streamlineCurve = null;
+
+function _streamOffset2(pt, tangent, radius, angle) {
   const up = new THREE.Vector3(0, 1, 0);
-  const binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+  let binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
   if (binormal.length() < 0.01) {
-    // tangent is parallel to up; use a different up
-    const altUp = new THREE.Vector3(1, 0, 0);
-    binormal.crossVectors(tangent, altUp).normalize();
+    binormal.crossVectors(tangent, new THREE.Vector3(1, 0, 0)).normalize();
   }
   const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
   return new THREE.Vector3()
@@ -413,80 +446,160 @@ function _streamOffset(pt, tangent, radius, angle) {
     .add(binormal.clone().multiplyScalar(radius * Math.sin(angle)));
 }
 
+const DASH_VERT = `
+attribute float aProgress;
+attribute vec3 aColor;
+varying float vProgress;
+varying vec3 vColor;
+void main() {
+  vProgress = aProgress;
+  vColor = aColor;
+  vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPos;
+}
+`;
+
+const DASH_FRAG = `
+uniform float uTime;
+uniform float uSpeed;
+uniform float uDashFreq;
+uniform float uDashLen;
+uniform float uOpacity;
+varying float vProgress;
+varying vec3 vColor;
+void main() {
+  float phase = vProgress * uDashFreq - uTime * uSpeed;
+  float pos = fract(phase);
+  float dashMask = step(pos, uDashLen);
+  float glow = 1.0 - smoothstep(uDashLen * 0.5, uDashLen + 0.08, pos);
+  vec3 dashColor = vec3(0.7, 0.9, 1.0);
+  vec3 finalColor = mix(vColor * 0.2, dashColor, max(dashMask, glow * 0.5));
+  finalColor += vec3(0.3, 0.5, 0.8) * glow * 0.4;
+  float alpha = mix(0.06, 0.95, dashMask) * uOpacity;
+  gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
 function buildStreamlines() {
-  const curve = new THREE.CatmullRomCurve3(STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+  const pts = STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+  streamlineCurve = new THREE.CatmullRomCurve3(pts);
 
-  const positions = new Float32Array(STREAM_COUNT * 3);
-  const colors = new Float32Array(STREAM_COUNT * 3);
-  const sizes = new Float32Array(STREAM_COUNT);
+  const sharedMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uSpeed: { value: 0.12 },
+      uDashFreq: { value: 5.0 },
+      uDashLen: { value: 0.10 },
+      uOpacity: { value: 0.8 },
+    },
+    vertexShader: DASH_VERT,
+    fragmentShader: DASH_FRAG,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+  });
 
-  for (let i = 0; i < STREAM_COUNT; i++) {
-    streamOffsets[i] = Math.random();
-    streamSpeeds[i] = 0.001 + Math.random() * 0.006;
-    // Each particle has a fixed radial offset forming a volumetric tube
-    streamRadii[i] = Math.sqrt(Math.random()) * STREAM_TUBE_RADIUS;
-    streamAngles[i] = Math.random() * Math.PI * 2;
-    const t = streamOffsets[i];
-    const pt = curve.getPoint(t);
-    const tangent = curve.getTangent(t);
-    const off = _streamOffset(pt, tangent, streamRadii[i], streamAngles[i]);
-    positions[i*3] = off.x;
-    positions[i*3+1] = off.y;
-    positions[i*3+2] = off.z;
-    sizes[i] = 30 + Math.random() * 50;
-    const hue = 0.58 - t * 0.50;
-    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.5 + t * 0.15);
-    colors[i*3] = c.r;
-    colors[i*3+1] = c.g;
-    colors[i*3+2] = c.b;
+  for (let i = 0; i < MAX_STREAMS; i++) {
+    const seedAngle = Math.random() * Math.PI * 2;
+    const seedRadius = Math.sqrt(Math.random()) * STREAM_MAX_RADIUS;
+    const seedSpeed = 0.08 + Math.random() * 0.06;
+
+    const positions = new Float32Array(SEGS * 3);
+    const colors = new Float32Array(SEGS * 3);
+    const progress = new Float32Array(SEGS);
+
+    for (let j = 0; j < SEGS; j++) {
+      const t = j / (SEGS - 1);
+      progress[j] = t;
+      const pt = streamlineCurve.getPoint(t);
+      const tangent = streamlineCurve.getTangent(t);
+      const rScale = _stageLerp(t, 'rad');
+      const swirl = _stageLerp(t, 'swl') * t;
+      const radius = seedRadius * rScale;
+      const angle = seedAngle + swirl;
+      const off = _streamOffset2(pt, tangent, radius, angle);
+      positions[j*3] = off.x;
+      positions[j*3+1] = off.y;
+      positions[j*3+2] = off.z;
+      const c = _streamColor(t);
+      colors[j*3] = c.r;
+      colors[j*3+1] = c.g;
+      colors[j*3+2] = c.b;
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    geom.setAttribute('aProgress', new THREE.BufferAttribute(progress, 1));
+
+    const line = new THREE.Line(geom, sharedMat);
+    line.visible = i < 20;
+    scene.add(line);
+    streamGroups.push({ line, geom, seedAngle, seedRadius, seedSpeed });
   }
 
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-  const mat = new THREE.PointsMaterial({
-    size: 60,
+  // Dash-tip particles
+  const pPos = new Float32Array(MAX_STREAMS * 3);
+  const pCol = new Float32Array(MAX_STREAMS * 3);
+  const pSiz = new Float32Array(MAX_STREAMS);
+  for (let i = 0; i < MAX_STREAMS; i++) {
+    pCol[i*3] = 0.8; pCol[i*3+1] = 0.9; pCol[i*3+2] = 1.0;
+    pSiz[i] = 20 + Math.random() * 15;
+  }
+  const pGeom = new THREE.BufferGeometry();
+  pGeom.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  pGeom.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+  pGeom.setAttribute('size', new THREE.BufferAttribute(pSiz, 1));
+  const pMat = new THREE.PointsMaterial({
+    size: 28,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.9,
     vertexColors: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
     sizeAttenuation: true,
   });
-
-  streamParticles = new THREE.Points(geom, mat);
-  streamParticlePositions = geom.attributes.position;
-  streamSizes = geom.attributes.size;
-  scene.add(streamParticles);
+  dashParticles = new THREE.Points(pGeom, pMat);
+  dashParticlePos = pGeom.attributes.position;
+  scene.add(dashParticles);
 }
 
 function updateStreamlines(delta, rpmVal) {
-  if (!streamParticles || !streamParticlePositions) return;
-  const curve = new THREE.CatmullRomCurve3(STREAM_PATH.map(p => new THREE.Vector3(p[0], p[1], p[2])));
-  const speedScale = Math.max(0.15, rpmVal / 60000);
-  const pos = streamParticlePositions.array;
-  const col = streamParticles.geometry.attributes.color;
+  if (!streamGroups.length) return;
+  const speedScale = Math.max(0.1, rpmVal / 50000);
+  dashTime += delta * speedScale * 0.5;
 
-  for (let i = 0; i < STREAM_COUNT; i++) {
-    streamOffsets[i] = (streamOffsets[i] + streamSpeeds[i] * delta * speedScale) % 1.0;
-    const t = streamOffsets[i];
-    const pt = curve.getPoint(t);
-    const tangent = curve.getTangent(t);
-    const off = _streamOffset(pt, tangent, streamRadii[i], streamAngles[i]);
+  const target = Math.max(4, Math.min(MAX_STREAMS, Math.round(MAX_STREAMS * (rpmVal / 75000))));
+  visibleStreams += (target - visibleStreams) * 0.05;
+
+  const mat = streamGroups[0].line.material;
+  mat.uniforms.uTime.value = dashTime;
+  mat.uniforms.uSpeed.value = 0.06 + speedScale * 0.14;
+  mat.uniforms.uOpacity.value = 0.4 + speedScale * 0.45;
+
+  const pos = dashParticlePos.array;
+  for (let i = 0; i < MAX_STREAMS; i++) {
+    const sg = streamGroups[i];
+    const visible = i < Math.round(visibleStreams);
+    sg.line.visible = visible;
+    if (!visible) continue;
+
+    const baseT = (dashTime * (0.04 + sg.seedSpeed)) % 1.0;
+    const t = baseT;
+    const pt = streamlineCurve.getPoint(t);
+    const tangent = streamlineCurve.getTangent(t);
+    const rScale = _stageLerp(t, 'rad');
+    const swirl = _stageLerp(t, 'swl') * t;
+    const radius = sg.seedRadius * rScale;
+    const angle = sg.seedAngle + swirl;
+    const off = _streamOffset2(pt, tangent, radius, angle);
     pos[i*3] = off.x;
     pos[i*3+1] = off.y;
     pos[i*3+2] = off.z;
-    const hue = 0.58 - t * 0.50;
-    const c = new THREE.Color().setHSL(Math.max(0, hue), 0.9, 0.5 + t * 0.15);
-    col.array[i*3] = c.r;
-    col.array[i*3+1] = c.g;
-    col.array[i*3+2] = c.b;
   }
-  streamParticlePositions.needsUpdate = true;
-  col.needsUpdate = true;
+  dashParticlePos.needsUpdate = true;
 }
 
 // ============================================================
@@ -1550,10 +1663,6 @@ document.getElementById('replaySeek').addEventListener('input', (e) => {
 // ============================================================
 let rpm = 12000;
 let faultPulse = 0;
-const streamOffsets = new Float32Array(STREAM_COUNT);
-const streamSpeeds = new Float32Array(STREAM_COUNT);
-const streamRadii = new Float32Array(STREAM_COUNT);
-const streamAngles = new Float32Array(STREAM_COUNT);
 
 function animate() {
   requestAnimationFrame(animate);
