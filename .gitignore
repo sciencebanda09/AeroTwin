@@ -7,6 +7,7 @@ __pycache__/
 .coverage
 htmlcov/
 .ruff_cache/
+.mypy_cache/
 models/*.joblib
 results/*
 !.gitkeep

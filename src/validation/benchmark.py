@@ -176,6 +176,7 @@ def evaluate_on_cmapss_format(
 
 # ── C-MAPSS full validation ──────────────────────────────────────────────
 
+
 def run_cmapss_validation(
     data_dir: str | Path = "data/cmapss",
     output_dir: str | Path = "results/cmapss",
@@ -187,13 +188,15 @@ def run_cmapss_validation(
     """
     from src.dataset.cmapss import (
         SUBSETS,
-        benchmark_subset,
         download,
         load_subset,
         prepare_ml_data,
     )
-    from sklearn.ensemble import ExtraTreesRegressor, HistGradientBoostingRegressor, RandomForestRegressor, StackingRegressor, GradientBoostingRegressor
-    from sklearn.linear_model import Ridge
+    from sklearn.ensemble import (
+        ExtraTreesRegressor,
+        HistGradientBoostingRegressor,
+        RandomForestRegressor,
+    )
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -216,9 +219,15 @@ def run_cmapss_validation(
 
         # Build raw sklearn regressors (bypass SurrogateModel's turbojet feature engineering)
         model_builders = {
-            "extra_trees": lambda: ExtraTreesRegressor(n_estimators=150, random_state=42, n_jobs=-1),
-            "hist_gradient_boosting": lambda: HistGradientBoostingRegressor(max_iter=150, random_state=42),
-            "random_forest": lambda: RandomForestRegressor(n_estimators=150, random_state=42, n_jobs=-1),
+            "extra_trees": lambda: ExtraTreesRegressor(
+                n_estimators=150, random_state=42, n_jobs=-1
+            ),
+            "hist_gradient_boosting": lambda: HistGradientBoostingRegressor(
+                max_iter=150, random_state=42
+            ),
+            "random_forest": lambda: RandomForestRegressor(
+                n_estimators=150, random_state=42, n_jobs=-1
+            ),
         }
 
         subset_results: list[dict[str, Any]] = []
@@ -236,13 +245,15 @@ def run_cmapss_validation(
             rmse = float(np.sqrt(mean_squared_error(y_test, preds)))
             mae = float(mean_absolute_error(y_test, preds))
             r2 = float(r2_score(y_test, preds))
-            subset_results.append({
-                "kind": kind,
-                "rmse": rmse,
-                "mae": mae,
-                "r2": r2,
-                "inference_ms": round(elapsed / len(X_test), 3),
-            })
+            subset_results.append(
+                {
+                    "kind": kind,
+                    "rmse": rmse,
+                    "mae": mae,
+                    "r2": r2,
+                    "inference_ms": round(elapsed / len(X_test), 3),
+                }
+            )
             print(f"  {kind:>25s} on {subset}: RMSE={rmse:.2f}  R2={r2:.4f}")
 
         results[subset] = subset_results
@@ -330,32 +341,34 @@ def _generate_cmapss_report(
         lines.append("---")
         lines.append("")
 
-    lines.extend([
-        "## Discussion",
-        "",
-        "C-MAPSS is a *turbofan* simulation; our physics model is calibrated for a",
-        "single-spool *turbojet*.  Direct physics transfer is not appropriate.",
-        "The tree-based models above use only raw sensor features (no physics-informed",
-        "feature engineering) and are representative baselines for evaluating whether",
-        "our ML infrastructure generalises to a well-known public benchmark.",
-        "",
-        "### Key observations",
-        "",
-        "1. **FD001** (single condition, single fault) is the easiest subset and is",
-        "   where tree ensembles typically perform closest to deep-learning methods.",
-        "2. **FD002/FD004** (multiple operating conditions) are harder for tree models",
-        "   because they struggle to interpolate across condition regimes without",
-        "   explicit physics structure - this is where LSTM/DCNN tend to excel.",
-        "3. **Stacking** (ExtraTrees + RandomForest + GradientBoosting -> Ridge) often",
-        "   provides a small improvement over individual tree ensembles.",
-        "",
-        "### Context",
-        "",
-        "These results should be interpreted as an infrastructure cross-check: our",
-        "training pipeline, feature handling, and evaluation framework work correctly",
-        "on a standard benchmark.  The turbojet health-monitoring results in the",
-        "main validation report remain the primary performance characterisation.",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Discussion",
+            "",
+            "C-MAPSS is a *turbofan* simulation; our physics model is calibrated for a",
+            "single-spool *turbojet*.  Direct physics transfer is not appropriate.",
+            "The tree-based models above use only raw sensor features (no physics-informed",
+            "feature engineering) and are representative baselines for evaluating whether",
+            "our ML infrastructure generalises to a well-known public benchmark.",
+            "",
+            "### Key observations",
+            "",
+            "1. **FD001** (single condition, single fault) is the easiest subset and is",
+            "   where tree ensembles typically perform closest to deep-learning methods.",
+            "2. **FD002/FD004** (multiple operating conditions) are harder for tree models",
+            "   because they struggle to interpolate across condition regimes without",
+            "   explicit physics structure - this is where LSTM/DCNN tend to excel.",
+            "3. **Stacking** (ExtraTrees + RandomForest + GradientBoosting -> Ridge) often",
+            "   provides a small improvement over individual tree ensembles.",
+            "",
+            "### Context",
+            "",
+            "These results should be interpreted as an infrastructure cross-check: our",
+            "training pipeline, feature handling, and evaluation framework work correctly",
+            "on a standard benchmark.  The turbojet health-monitoring results in the",
+            "main validation report remain the primary performance characterisation.",
+            "",
+        ]
+    )
     path.write_text("\n".join(lines))
     print(f"C-MAPSS validation report -> {path}")

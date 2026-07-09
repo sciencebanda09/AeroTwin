@@ -421,7 +421,11 @@ try:
 
             # Project future cycles for key health thresholds
             thresholds = [0.75, 0.55, 0.30]
-            labels = ["Moderate risk (increase monitoring)", "High risk (schedule inspection)", "Critical (remove from service)"]
+            labels = [
+                "Moderate risk (increase monitoring)",
+                "High risk (schedule inspection)",
+                "Critical (remove from service)",
+            ]
             milestones = []
             for th, lbl in zip(thresholds, labels):
                 if health_now > th and rate > 1e-6:

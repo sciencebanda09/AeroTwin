@@ -17,32 +17,28 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
-from urllib.request import urlretrieve
 import numpy as np
 import pandas as pd
 
 SUBSETS: list[Literal["FD001", "FD002", "FD003", "FD004"]] = ["FD001", "FD002", "FD003", "FD004"]
 
 # C-MAPSS column layout (space-delimited, no header)
-CMAPSS_COLUMNS = (
-    ["unit", "cycle", "altitude", "mach", "tra"]
-    + [f"s{i}" for i in range(1, 22)]
-)
+CMAPSS_COLUMNS = ["unit", "cycle", "altitude", "mach", "tra"] + [f"s{i}" for i in range(1, 22)]
 
 # Operational-setting labels matching our sensor schema
 OP_LABELS = {"altitude": "Altitude", "mach": "Mach"}
 
 # C-MAPSS → turbojet sensor aliases (closest available)
 SENSOR_ALIASES: dict[str, str] = {
-    "s1": "T2",    # fan inlet temperature  → our T2
-    "s2": "T24",   # LPC outlet temperature → no direct match, keep raw
-    "s3": "T3",    # HPC outlet temperature → our T3
-    "s4": "T50",   # LPT outlet temperature → partial match to our T4
-    "s5": "P2",    # fan inlet pressure     → our P2
-    "s6": "P15",   # bypass-duct pressure   → no direct match
-    "s7": "P3",    # HPC outlet pressure    → our P3
-    "s8": "Nf",    # fan speed              → no direct match
-    "s9": "RPM",   # core speed             → our RPM
+    "s1": "T2",  # fan inlet temperature  → our T2
+    "s2": "T24",  # LPC outlet temperature → no direct match, keep raw
+    "s3": "T3",  # HPC outlet temperature → our T3
+    "s4": "T50",  # LPT outlet temperature → partial match to our T4
+    "s5": "P2",  # fan inlet pressure     → our P2
+    "s6": "P15",  # bypass-duct pressure   → no direct match
+    "s7": "P3",  # HPC outlet pressure    → our P3
+    "s8": "Nf",  # fan speed              → no direct match
+    "s9": "RPM",  # core speed             → our RPM
 }
 
 CMAPSS_ZIP_URL = "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
@@ -217,11 +213,11 @@ def prepare_ml_data(
     degradation trends.  Returns:
         X_train, y_train, X_test, y_test
     """
-    base_cols = cmapss_feature_columns()
-
     train_feat = _add_temporal_features(train)
     test_feat = _add_temporal_features(test)
-    feature_cols = [c for c in train_feat.columns if c in test_feat.columns and c not in ("unit", "cycle")]
+    feature_cols = [
+        c for c in train_feat.columns if c in test_feat.columns and c not in ("unit", "cycle")
+    ]
 
     X_train = train_feat[feature_cols].copy()
     y_train = train.groupby("unit").cumcount(ascending=False).values.astype(float)
